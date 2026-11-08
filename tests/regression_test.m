@@ -32,13 +32,23 @@ results = struct('caseId', cell(1,total), 'passed', num2cell(false(1,total)), ..
 tolAbs = 1e-9; tolRel = 1e-9;
 set(0, 'DefaultFigureVisible', 'off');
 
+% Prepare report directories: latest/ + timestamped archive/, each with a
+% snapshots/ subfolder for per-case PSL figures.
+[latestDir, archDir] = setupReportDirs(fullfile(root, 'report'));
+snapLatest = fullfile(latestDir, 'snapshots');
+snapArch   = fullfile(archDir,   'snapshots');
+
 runtests = 0;
 for c = 1:total
     cid = cases{c};
     t0 = tic;
     err = ''; maxErr = 0; ok = true;
+    snapPath = fullfile(snapLatest, [cid '_psls.png']);
     try
-        runCase(root, cid);
+        runCase(root, cid, snapPath);
+        if exist(archDir, 'dir')
+            copyfile(snapPath, fullfile(snapArch, [cid '_psls.png']));
+        end
         load(fullfile(root, 'baseline', [cid '_major.mat']), 'numPSLs', 'numPts', 'coords');
         bMajor = struct('numPSLs', numPSLs, 'numPts', numPts, 'coords', {coords});
         load(fullfile(root, 'baseline', [cid '_minor.mat']), 'numPSLs', 'numPts', 'coords');
@@ -84,8 +94,8 @@ end
 npass = sum([results.passed]);
 fprintf('\nRegression: %d/%d passed\n', npass, runtests);
 
-% Write summary.json
-writeSummary(fullfile(root, 'report'), results, npass, runtests);
+% Write report triple: summary.json (pretty), regression.xml (JUnit), index.html
+writeReport(fullfile(root, 'report'), results, npass, runtests);
 
 % Assert overall (throw if any failed, so caller/CI sees non-zero exit).
 if npass < runtests
@@ -114,11 +124,11 @@ end
 end
 
 %% ---------------------------------------------------------------------------
-function runCase(root, cid)
+function runCase(root, cid, snapPath)
 cc = lookupCase(root, cid);
 clear global;
 PSLshell(fullfile(root, 'data', cc.file), cc.profile, ...
-    struct('showProblem', 0, 'showPSLs', 0, 'saveFig', ''));
+    struct('showProblem', 0, 'showPSLs', 1, 'saveFig', snapPath));
 end
 
 function [ok, err, maxErr] = cmpPool(pool, base, label, tolAbs, tolRel)
@@ -203,12 +213,19 @@ n = sqrt(sum(d.^2, 2));
 maxErr = max(n);
 end
 
-function writeSummary(reportRoot, results, npass, runtests)
+function [latest, arch] = setupReportDirs(reportRoot)
 if ~exist(reportRoot, 'dir'), mkdir(reportRoot); end
-ts = datestr(now, 30); ts = strrep(ts, ':', '-');
-latest = fullfile(reportRoot, 'latest'); arch = fullfile(reportRoot, ts);
+ts = datestr(now, 'yyyymmddTHHMMSS');
+latest = fullfile(reportRoot, 'latest');
+arch   = fullfile(reportRoot, ts);
 if ~exist(latest, 'dir'), mkdir(latest); end
 if ~exist(arch, 'dir'), mkdir(arch); end
+if ~exist(fullfile(latest, 'snapshots'), 'dir'), mkdir(fullfile(latest, 'snapshots')); end
+if ~exist(fullfile(arch, 'snapshots'), 'dir'), mkdir(fullfile(arch, 'snapshots')); end
+end
+
+function writeReport(reportRoot, results, npass, runtests)
+[latest, arch] = setupReportDirs(reportRoot);
 
 s = struct();
 s.generatedAt = datestr(now, 31);
@@ -217,22 +234,32 @@ s.total = runtests;
 s.passed = npass;
 s.failed = runtests - npass;
 s.cases = results;
+
+% Pretty-printed, multi-line JSON (readable in VS Code / any editor).
 writeJson(fullfile(latest, 'summary.json'), s);
 writeJson(fullfile(arch, 'summary.json'), s);
 
-% Minimal JUnit XML (CI-consumable).
+% JUnit XML (CI-consumable).
 xml = junitXml(results, runtests, npass);
-fid = fopen(fullfile(latest, 'regression.xml'), 'w');
-fprintf(fid, '%s', xml); fclose(fid);
-fid = fopen(fullfile(arch, 'regression.xml'), 'w');
-fprintf(fid, '%s', xml); fclose(fid);
+writeText(fullfile(latest, 'regression.xml'), xml);
+writeText(fullfile(arch, 'regression.xml'), xml);
+
+% Self-contained HTML report with per-case PSL figures.
+writeText(fullfile(latest, 'index.html'), buildHtmlReport(s));
+writeText(fullfile(arch, 'index.html'), buildHtmlReport(s));
+
 fprintf('Report written to %s\n', latest);
 end
 
 function writeJson(path, s)
+% Pretty-printed JSON via pjson.m (R2019b-compatible).
+writeText(path, [pjson(s) newline]);
+end
+
+function writeText(path, str)
 fid = fopen(path, 'w');
 if fid < 0, error('Cannot write %s', path); end
-fprintf(fid, '%s\n', jsonencode(s));
+fprintf(fid, '%s', str);
 fclose(fid);
 end
 
@@ -254,6 +281,78 @@ function s = escapeXml(s)
 s = strrep(s, '&', '&amp;');
 s = strrep(s, '<', '&lt;');
 s = strrep(s, '>', '&gt;');
+end
+
+function html = buildHtmlReport(s)
+% buildHtmlReport - render a self-contained HTML report with per-case cards.
+% Each card shows the PSL snapshot figure, pass/fail badge, maxL1err, duration.
+n = numel(s.cases);
+cards = cell(1, n);
+for i = 1:n
+    c = s.cases(i);
+    if c.passed
+        badge = '<span class="badge pass">PASS</span>';
+    else
+        badge = '<span class="badge fail">FAIL</span>';
+    end
+    errRow = '';
+    if ~c.passed && ~isempty(c.errWhere)
+        errRow = ['<div class="errdetail">' htmlEsc(c.errWhere) '</div>'];
+    end
+    cards{i} = sprintf([ ...
+        '    <div class="card">\n' ...
+        '      <div class="card-head">%s %s</div>\n' ...
+        '      <img src="snapshots/%s_psls.png" alt="%s" loading="lazy">\n' ...
+        '      <div class="card-meta">\n' ...
+        '        <span>maxL1err: <b>%.3e</b></span>\n' ...
+        '        <span>%.2fs</span>\n' ...
+        '      </div>\n' ...
+        '      %s\n' ...
+        '    </div>'], ...
+        htmlEsc(c.caseId), badge, htmlEsc(c.caseId), htmlEsc(c.caseId), ...
+        c.maxL1err, c.duration, errRow);
+end
+
+html = [ ...
+    '<!DOCTYPE html>' newline ...
+    '<html lang="zh-CN">' newline ...
+    '<head>' newline ...
+    '<meta charset="UTF-8">' newline ...
+    '<meta name="viewport" content="width=device-width, initial-scale=1.0">' newline ...
+    '<title>PSLshell 回归测试报告</title>' newline ...
+    '<style>' newline ...
+    '  :root{--bg:#f5f6f8;--card:#fff;--ink:#1a1a1a;--muted:#6b7280;--border:#e5e7eb;--pass:#16a34a;--fail:#dc2626;}' newline ...
+    '  *{box-sizing:border-box;} body{margin:0;font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--ink);}' newline ...
+    '  header{padding:24px 32px 8px;} header h1{margin:0 0 6px;font-size:20px;} header p{margin:0;color:var(--muted);font-size:13px;}' newline ...
+    '  .stats{display:flex;gap:20px;padding:8px 32px 4px;font-size:14px;} .stats b{font-size:18px;}' newline ...
+    '  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;padding:12px 32px 40px;}' newline ...
+    '  .card{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);}' newline ...
+    '  .card img{width:100%;height:230px;object-fit:cover;display:block;background:#fff;}' newline ...
+    '  .card-head{font-weight:600;font-size:14px;padding:10px 12px 6px;}' newline ...
+    '  .card-meta{display:flex;justify-content:space-between;padding:0 12px 10px;font-size:12px;color:var(--muted);}' newline ...
+    '  .badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;margin-left:6px;color:#fff;}' newline ...
+    '  .pass{background:var(--pass);} .fail{background:var(--fail);}' newline ...
+    '  .errdetail{font-size:11px;color:var(--fail);padding:0 12px 10px;word-break:break-all;}' newline ...
+    '</style>' newline ...
+    '</head>' newline ...
+    '<body>' newline ...
+    '<header><h1>PSLshell 回归测试报告</h1><p>生成时间 ' htmlEsc(s.generatedAt) ' · MATLAB ' htmlEsc(s.matlabVersion) '</p></header>' newline ...
+    '<div class="stats">' newline ...
+    sprintf('  <div>总计 <b>%d</b></div>\n  <div>通过 <b style="color:var(--pass)">%d</b></div>\n  <div>失败 <b style="color:var(--fail)">%d</b></div>\n', s.total, s.passed, s.failed) ...
+    '</div>' newline ...
+    '<div class="grid">' newline ...
+    strjoin(cards, newline) newline ...
+    '</div>' newline ...
+    '</body>' newline ...
+    '</html>' newline ...
+    ];
+end
+
+function s = htmlEsc(s)
+s = strrep(s, '&', '&amp;');
+s = strrep(s, '<', '&lt;');
+s = strrep(s, '>', '&gt;');
+s = strrep(s, '"', '&quot;');
 end
 
 function cids = defCaseIds()
