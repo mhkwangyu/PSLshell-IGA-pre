@@ -1,22 +1,35 @@
-### AL ###
-#Template for AL projects for Dynamics 365 Business Central
-#launch.json folder
+# MATLAB
+*.asv
+*.m~
+*.mlappinstall
+*.mlpkginstall
+*.slx.bak
+slprj/
+*.slxc
+*.mlx
+.mex*
+*.mexa64
+*.mexw64
+*.mexmaci64
+*.mexglx
+
+# MATLAB generated / cache
+*.fig.bak
+
+# Regression test report (runtime artifacts — do NOT commit)
+report/
+
+# Baseline snapshot figures are committed intentionally (baseline/snapshots/).
+# Baseline .mat goldens are committed intentionally (baseline/*.mat).
+
+# WorkBuddy project data (NOT part of the codebase)
+.workbuddy/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
 .vscode/
-#Cache folder
-.alcache/
-#Symbols folder
-.alpackages/
-#Snapshots folder
-.snapshots/
-#Testing Output folder
-.output/
-#Extension App-file
-*.app
-#Rapid Application Development File
-rad.json
-#Translation Base-file
-*.g.xlf
-#License-file
-*.flf
-#Test results file
-TestResults.xml
+.idea/
