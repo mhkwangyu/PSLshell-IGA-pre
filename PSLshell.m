@@ -7,50 +7,46 @@
 %% by Junpeng Wang, Yingjian Liu, Jun Wu, and Rüdiger Westermann.
 %% Preprint can be found at https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5776659
 
-clear all; clc;
+function PSLshell(fileName, profile, opts)
+%% Minimal entry refactor (script -> function). No algorithm change.
+%% Usage:
+%%   PSLshell                                -> default cylinder_1_Q4 with paper profile
+%%   PSLshell(stressfileName)                -> custom data file (without .TSV)
+%%   PSLshell(stressfileName, profile)       -> custom tracing profile
+%%   PSLshell(stressfileName, profile, opts) -> opts.showProblem / opts.showPSLs / opts.saveFig
+if nargin < 1 || isempty(fileName), fileName = './data/cylinder_1_Q4'; end
+if nargin < 2 || isempty(profile), profile = pslDefaultProfile(); end
+if nargin < 3 || isempty(opts), opts = struct(); end
+if ~isfield(opts,'showProblem'), opts.showProblem = 1; end
+if ~isfield(opts,'showPSLs'),    opts.showPSLs    = 1; end
+if ~isfield(opts,'saveFig'),     opts.saveFig     = ''; end
+
+clear global;
 GlobalVariables();
 
 %%1. Import Data
 tStart = tic;
-stressfileName = './data/cylinder_1_Q4';
-ImportStressFields(strcat(stressfileName, '.TSV'));
+ImportStressFields(strcat(fileName, '.TSV'));
 disp(['Import Stress Field Costs: ' sprintf('%10.3g',toc(tStart)) 's']);
 
 %%2. Pre-process Data
 tStart = tic;
 PreProcessData();
 disp(['Pre-process Data Costs: ' sprintf('%10.3g',toc(tStart)) 's']);
-figure; ShowProblemDescription();
+if opts.showProblem, figure; ShowProblemDescription(); end
 
 if 1 %% PSLs Generation
 	%%3. Seeding PSLs
 	tStart = tic;
-	profile = struct(...
-		'PSLsDensityCtrl',		10,				...	%% minDim/PSLsDensityCtrl ('\omega in the paper')
-		'PSLtypeCtrl',			[0 0], 			... %% [major, minor], 0==generate, 1==skip
-		'topologyAware',		1, 				... %% Enable Topology Analysis
-		'distanceMetric',		'Euclidean', 	... %% 'Euclidean', 'Geodesic'
-		'seedSparsityCtrl',		1,				... %% Every 'value' element is sampled
-		'maxIts',				1000			... %% Maximum Integration Steps in a Single Run of PSL Tracing
-	);
-	%% =================================Settings for Paper replicability=================================
-	%% #Planar Plate
-	% profile = struct('PSLsDensityCtrl', 30, 'PSLtypeCtrl', [0 0], 'topologyAware', 1, 'distanceMetric', 'Euclidean', 'seedSparsityCtrl', 1, 'maxIts', 1000);
-	%% #Cylinder; #Dome
-	% profile = struct('PSLsDensityCtrl', 10, 'PSLtypeCtrl', [0 0], 'topologyAware', 1, 'distanceMetric', 'Euclidean', 'seedSparsityCtrl', 1, 'maxIts', 1000);
-	%% #Polyhedra-like Structure
-	% profile = struct('PSLsDensityCtrl', 15, 'PSLtypeCtrl', [0 0], 'topologyAware', 1, 'distanceMetric', 'Euclidean', 'seedSparsityCtrl', 1, 'maxIts', 1000);
-	%% #Wing
-	% profile = struct('PSLsDensityCtrl', 3, 'PSLtypeCtrl', [0 0], 'topologyAware', 1, 'distanceMetric', 'Geodesic', 'seedSparsityCtrl', 1, 'maxIts', 2000);
-	%% #Wind turbine blade
-	% profile = struct('PSLsDensityCtrl', 5, 'PSLtypeCtrl', [0 0], 'topologyAware', 1, 'distanceMetric', 'Geodesic', 'seedSparsityCtrl', 1, 'maxIts', 2000);
-	%% #TPMS
-	% profile = struct('PSLsDensityCtrl', 40, 'PSLtypeCtrl', [0 0], 'topologyAware', 1, 'distanceMetric', 'Euclidean', 'seedSparsityCtrl', 1, 'maxIts', 2000);    
 	SeedingPSLs(profile); 
 	disp(['Seeding PSL Costs: ' sprintf('%10.3g',toc(tStart)) 's']);
 	
 	%%3. Vis.
-	ShowPSLs('None', 'None', 1.0, 20);
+	if opts.showPSLs, ShowPSLs('None', 'None', 1.0, 20); end
+	if ~isempty(opts.saveFig)
+		print('-dpng', '-r300', opts.saveFig);
+		close(gcf);
+	end
 	% ShowPrincipalStressDirectionsByArrowsGlobally(); %%Show Principal Stress Directions via Arrows
 else %% Check Mesh Normals
 	%%3. Evaluate Element Normals
@@ -62,6 +58,7 @@ else %% Check Mesh Normals
 		% ExportStressFieldWithFlippedNormals(strcat(stressfileNameNew, '.TSV'));
 	% end	
 end
+end %% PSLshell (main function end)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Source
@@ -3335,5 +3332,17 @@ function [paras, isDegePt] = NewtonRhapson_LocatingDegPt(iEle, target, varargin)
 	paras  = [s t];
 	inside = CheckWhetherGivenNaturalCoordinatesWithinDomain(paras, iEleType, 1.0e-12);
 	isDegePt = inside && it < maxIts;
+end
+
+function profile = pslDefaultProfile()
+%% Default tracing profile (paper: #Cylinder / #Dome)
+	profile = struct(...
+		'PSLsDensityCtrl',		10,				...	%% minDim/PSLsDensityCtrl ('\omega in the paper')
+		'PSLtypeCtrl',			[0 0], 			... %% [major, minor], 0==generate, 1==skip
+		'topologyAware',		1, 				... %% Enable Topology Analysis
+		'distanceMetric',		'Euclidean', 	... %% 'Euclidean', 'Geodesic'
+		'seedSparsityCtrl',		1,				... %% Every 'value' element is sampled
+		'maxIts',				1000			... %% Maximum Integration Steps in a Single Run of PSL Tracing
+	);
 end
 
