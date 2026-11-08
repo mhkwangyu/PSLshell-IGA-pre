@@ -1,0 +1,1 @@
+{"caseId":"cylinder_Q4","dataFile":"cylinder_1_Q4.TSV","profile":{"PSLsDensityCtrl":10,"PSLtypeCtrl":[0,0],"topologyAware":1,"distanceMetric":"Euclidean","seedSparsityCtrl":1,"maxIts":1000},"matlabVersion":"24.2.0.2712019 (R2024b)","generatedAt":"2026-11-07 23:16:11","numMajorPSLs":16,"numMinorPSLs":16,"numDegPts":0}

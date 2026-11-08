@@ -1,0 +1,1 @@
+{"caseId":"dome","dataFile":"E6_dome_Q8.TSV","profile":{"PSLsDensityCtrl":10,"PSLtypeCtrl":[0,0],"topologyAware":1,"distanceMetric":"Euclidean","seedSparsityCtrl":1,"maxIts":1000},"matlabVersion":"24.2.0.2712019 (R2024b)","generatedAt":"2026-11-07 23:27:47","numMajorPSLs":125,"numMinorPSLs":107,"numDegPts":17}

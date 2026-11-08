@@ -1,0 +1,1 @@
+{"caseId":"tpms_neovius","dataFile":"E8_TPMS_Neovius.TSV","profile":{"PSLsDensityCtrl":40,"PSLtypeCtrl":[0,0],"topologyAware":1,"distanceMetric":"Euclidean","seedSparsityCtrl":1,"maxIts":2000},"matlabVersion":"24.2.0.2712019 (R2024b)","generatedAt":"2026-11-07 23:46:51","numMajorPSLs":1361,"numMinorPSLs":1386,"numDegPts":549}

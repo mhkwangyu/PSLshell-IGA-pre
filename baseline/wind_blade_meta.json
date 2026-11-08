@@ -1,0 +1,1 @@
+{"caseId":"wind_blade","dataFile":"E5_wind_blade_T3.TSV","profile":{"PSLsDensityCtrl":5,"PSLtypeCtrl":[0,0],"topologyAware":1,"distanceMetric":"Geodesic","seedSparsityCtrl":1,"maxIts":2000},"matlabVersion":"24.2.0.2712019 (R2024b)","generatedAt":"2026-11-07 23:19:48","numMajorPSLs":70,"numMinorPSLs":74,"numDegPts":4}

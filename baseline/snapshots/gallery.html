@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PSLshell 回归基线 — 19 案例主应力迹线快照</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --ink: #1a1a1a; --muted: #6b7280;
+    --orange: #e07a40; --teal: #2f9b82; --purple: #7b3fa0; --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--ink); }
+  header { padding: 28px 32px 8px; }
+  header h1 { margin: 0 0 6px; font-size: 22px; }
+  header p { margin: 0; color: var(--muted); font-size: 14px; }
+  .legend { display: flex; gap: 20px; padding: 10px 32px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; padding: 12px 32px 40px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  .card img { width: 100%; height: 240px; object-fit: cover; display: block; background: #fff; }
+  .card-body { padding: 12px 14px 14px; }
+  .card-title { font-weight: 600; font-size: 15px; margin-bottom: 6px; }
+  .meta { font-size: 12px; color: var(--muted); line-height: 1.6; }
+  .meta b { color: var(--ink); }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11px; margin-left: 6px; }
+  .dege-0 { background: #f3f4f6; color: #6b7280; }
+  .dege-low { background: #fff1e6; color: #c05621; }
+  .dege-high { background: #f0e5f8; color: #7b3fa0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>PSLshell 回归基线 · 主应力迹线快照</h1>
+  <p>19 个案例，每张为 300dpi 干净迹线图。用于人工核查迹线形态、抽稀密度与退化点分布是否合理。</p>
+</header>
+<div class="legend">
+  <span><span class="dot" style="background:var(--orange)"></span> Major 主应力迹线</span>
+  <span><span class="dot" style="background:var(--teal)"></span> Minor 主应力迹线</span>
+  <span><span class="dot" style="background:var(--purple)"></span> 退化点 (Degenerate point)</span>
+  <span><span class="dot" style="background:#e5e7eb; border:1px solid #d1d5db"></span> 网壳表面</span>
+</div>
+<div class="grid">
+  <div class="card">
+    <img src="../baseline/snapshots/cylinder_Q4_psls.png" alt="cylinder_Q4">
+    <div class="card-body">
+      <div class="card-title">cylinder_Q4<span class="badge dege-0">dege 0</span></div>
+      <div class="meta">数据 <b>cylinder_1_Q4.TSV</b><br>major <b>16</b> · minor <b>16</b></div>
+    </div>
+  </div>
+  <div class="card">
+    <img src="../baseline/snapshots/cylinder_Q4_global_psls.png" alt="cylinder_Q4_global">
+    <div class="card-body">
+      <div class="card-title">cylinder_Q4_global<span class="badge dege-0">dege 0</span></div>
+      <div class="meta">数据 <b>cylinder_1_Q4_global.TSV</b><br>major <b>16</b> · minor <b>16</b></div>
+    </div>
+  </div>
+  <div class="card">
+    <img src="../baseline/snapshots/cylinder_Q8_psls.png" alt="cylinder_Q8">
+    <div class="card-body">
+      <div class="card-title">cylinder_Q8<span class="badge dege-0">dege 0</span></div>
+      <div class="meta">数据 <b>cylinder_1_Q8.TSV</b><br>major <b>16</b> · minor <b>16</b></div>
+    </div>
+  </div>
+  <div class="card">
+    <img src="../baseline/snapshots/cylinder_T3_psls.png" alt="cylinder_T3">
+    <div class="card-body">
+      <div class="card-title">cylinder_T3<span class="badge dege-0">dege 0</span></div>
+      <div class="meta">数据 <b>cylinder_1_T3.TSV</b><br>major <b>16</b> · minor <b>18</b></div>
+    </div>
+  </div>
+  <div class="card">
+    <img src="../baseline/snapshots/cylinder_T6_psls.png" alt="cylinder_T6">
+    <div class="card-body">
+      <div class="card-title">cylinder_T6<span class="badge dege-0">dege 0</span></div>
+      <div class="meta">数据 <b>cylinder_1_T6.TSV</b><br>major <b>16</b> · minor <b>17</b></div>
+    </div>
+  </div>
+  <div class="card">
+    <img src="../baseline/snapshots/cylinder_hybrid_Q4T3_psls.png" alt="cylinder_hybrid_Q4T3">
+    <div class="card-body">
+      <div class="card-title">cylinder_hybrid_Q4T3<span class="badge dege-0">dege 0</span></div>
+      <div class="meta">数据 <b>cylinder_1_hybrid_Q4T3.TSV</b><br>major <b>16</b> · minor <b>18</b></div>
+    </div>
+  </div>
+  <div class="card">
+    <img src="../baseline/snapshots/cylinder_hybrid_Q8T6_psls.png" alt="cylinder_hybrid_Q8T6">
+    <div class="card-body">
+      <div class="card-title">cylinder_hybrid_Q8T6<span class="badge dege-0">dege 0</span></div>
+      <div class="meta">数据 <b>cylinder_1_hybrid_Q8T6.TSV</b><br>major <b>18</b> · minor <b>16</b></div>
+    </div>
+  </div>
+  <div class="card">
+    <img src="../baseline/snapshots/plate_bottom_psls.png" alt="plate_bottom">
+    <div class="card-body">
+      <div class="card-title">plate_bottom<span class="badge dege-low">dege 2</span></div>
+      <div class="meta">数据 <b>E1_plate_T3_bottom.TSV</b><br>major <b>22</b> · minor <b>46</b></div>
+    </div>
+  </div>
+  <div class="card">
+    <img src="../baseline/snapshots/plate_top_psls.png" alt="plate_top">
+    <div class="card-body">
+      <div class="card-title">plate_top<span class="badge dege-low">dege 2</span></div>
+      <div class="meta">数据 <b>E1_plate_T3_top.TSV</b><br>major <b>44</b> · minor <b>22</b></div>
+    </div>
+  </div>
+  <div class="card">
+    <img src="../baseline/snapshots/wind_blade_psls.png" alt="wind_blade">
+    <div class="card-body">
+      <div class="card-title">wind_blade<span class="badge dege-low">dege 4</span></div>
+      <div class="meta">数据 <b>E5_wind_blade_T3.TSV</b><br>major <b>70</b> · minor <b>74</b></div>
+    </div>
+  </div>
+  <div class="card">
+    <img src="../baseline/snapshots/hemisphere_psls.png" alt="hemisphere">
+    <div class="card-body">
+      <div class="card-title">hemisphere<span class="badge dege-low">dege 6</span></div>
+      <div class="meta">数据 <b>E2_hemiSphere_Q8.TSV</b><br>major <b>31</b> · minor <b>26</b></div>
+    </div>
+  </div>
+  <div class="card">
+    <img src="../baseline/snapshots/polyhedra_psls.png" alt="polyhedra">
+    <div class="card-body">
+      <div class="card-title">polyhedra<span class="badge dege-low">dege 6</span></div>
+      <div class="meta">数据 <b>E3_Polyhedra_T6.TSV</b><br>major <b>52</b> · minor <b>38</b></div>
+    </div>
+  </div>
+  <div class="card">
+    <img src="../baseline/snapshots/wing_psls.png" alt="wing">
+    <div class="card-body">
+      <div class="card-title">wing<span class="badge dege-0">dege 0</span></div>
+      <div class="meta">数据 <b>E4_wing_T6.TSV</b><br>major <b>60</b> · minor <b>60</b></div>
+    </div>
+  </div>
+  <div class="card">
+    <img src="../baseline/snapshots/dome_psls.png" alt="dome">
+    <div class="card-body">
+      <div class="card-title">dome<span class="badge dege-low">dege 17</span></div>
+      <div class="meta">数据 <b>E6_dome_Q8.TSV</b><br>major <b>125</b> · minor <b>107</b></div>
+    </div>
+  </div>
+  <div class="card">
+    <img src="../baseline/snapshots/snail_psls.png" alt="snail">
+    <div class="card-body">
+      <div class="card-title">snail<span class="badge dege-low">dege 26</span></div>
+      <div class="meta">数据 <b>E7_snail_T3.TSV</b><br>major <b>68</b> · minor <b>70</b></div>
+    </div>
+  </div>
+  <div class="card">
+    <img src="../baseline/snapshots/tpms_diamond_psls.png" alt="tpms_diamond">
+    <div class="card-body">
+      <div class="card-title">tpms_diamond<span class="badge dege-high">dege 523</span></div>
+      <div class="meta">数据 <b>E8_TPMS_Diamond.TSV</b><br>major <b>1435</b> · minor <b>1448</b></div>
+    </div>
+  </div>
+  <div class="card">
+    <img src="../baseline/snapshots/tpms_groid_psls.png" alt="tpms_groid">
+    <div class="card-body">
+      <div class="card-title">tpms_groid<span class="badge dege-high">dege 372</span></div>
+      <div class="meta">数据 <b>E8_TPMS_Groid.TSV</b><br>major <b>1073</b> · minor <b>1110</b></div>
+    </div>
+  </div>
+  <div class="card">
+    <img src="../baseline/snapshots/tpms_neovius_psls.png" alt="tpms_neovius">
+    <div class="card-body">
+      <div class="card-title">tpms_neovius<span class="badge dege-high">dege 549</span></div>
+      <div class="meta">数据 <b>E8_TPMS_Neovius.TSV</b><br>major <b>1361</b> · minor <b>1386</b></div>
+    </div>
+  </div>
+  <div class="card">
+    <img src="../baseline/snapshots/tpms_schwarzP_psls.png" alt="tpms_schwarzP">
+    <div class="card-body">
+      <div class="card-title">tpms_schwarzP<span class="badge dege-high">dege 448</span></div>
+      <div class="meta">数据 <b>E8_TPMS_SchwarzP.TSV</b><br>major <b>1109</b> · minor <b>1157</b></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

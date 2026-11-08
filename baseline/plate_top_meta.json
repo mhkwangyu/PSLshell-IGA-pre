@@ -1,0 +1,1 @@
+{"caseId":"plate_top","dataFile":"E1_plate_T3_top.TSV","profile":{"PSLsDensityCtrl":30,"PSLtypeCtrl":[0,0],"topologyAware":1,"distanceMetric":"Euclidean","seedSparsityCtrl":1,"maxIts":1000},"matlabVersion":"24.2.0.2712019 (R2024b)","generatedAt":"2026-11-07 23:17:56","numMajorPSLs":44,"numMinorPSLs":22,"numDegPts":2}
