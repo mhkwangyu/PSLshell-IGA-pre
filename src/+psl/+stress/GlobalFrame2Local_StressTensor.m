@@ -1,4 +1,5 @@
 function stressOut = GlobalFrame2Local_StressTensor(stressIn, R, opt)
+%% 【论文 §2.2, Eq.9-10】全局系应力张量 → 局部系（面内）应力。opt 控制是否做三维嵌入。
 	%% sigma_xx, sigma_yy, sigma_zz, sigma_yz, sigma_zx, sigma_xy (global)
 	numComps = size(R,3);
 	if numComps~=size(stressIn,1)

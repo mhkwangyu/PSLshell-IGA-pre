@@ -1,4 +1,7 @@
 function ComputeTopologicalSkeletons()
+%% 【论文 §4.2, Eq.27-31】计算拓扑骨架：对每个退化点求偏应力场一阶导矩阵 M，
+%% delta=det(M) 判 trisector(<0)/wedge(>0)；实根三次方程 d·t³+(c+2b)t²+(2a-d)t-c=0
+%% 给出骨架分支方向，再从退化点出发沿各方向 Tracing 生成骨架 PSL。
 	global state_;
 	global state_;
 	global state_;

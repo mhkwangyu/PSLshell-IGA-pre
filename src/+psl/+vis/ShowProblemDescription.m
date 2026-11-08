@@ -1,4 +1,5 @@
 function ShowProblemDescription()
+%% 【结果可视化】显示算例问题描述（网格 + 边界条件）。
 	global state_;
 	global state_;
 	global state_;

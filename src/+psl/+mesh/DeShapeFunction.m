@@ -1,4 +1,6 @@
 function [dNds, dNdt] = DeShapeFunction(paras, elementType)
+%% 【论文 §2.1】形函数对自然坐标的一阶导数 dN/dξ、dN/dη。
+%% 用于求切向量 t1,t2（抛物线/双二次单元的切平面随 (ξ,η) 变化）。
 	numSamps = size(paras,1);
 	s = paras(:,1);
 	t = paras(:,2);	

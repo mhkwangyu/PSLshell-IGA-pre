@@ -1,4 +1,6 @@
 function IdentifyCandidateElements()
+%% 【论文 §4.3, Eq.35-39】候选单元预筛：符号一致性检查 + Bernstein-Bézier 区间界，
+%% 严格排除不可能含退化点的单元（对任意阶次成立，大幅缩小搜索范围）。
 	global state_;
 	global state_;
 	global state_;

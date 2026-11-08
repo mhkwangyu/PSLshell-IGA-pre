@@ -1,4 +1,6 @@
 function iPSL = CreatePrincipalStressLine(seed, tracingType, varargin)
+%% 【论文 §3.3, 图5】单条 PSL 的总控：准备初始状态 → 沿正/负两方向分别 Tracing → 拼接。
+%% psDir 区分主(MAJOR)/次(MINOR)；可选 varargin 传入退化点处的预设骨架方向。
 	iPSL = psl.trace.PrincipalStressLineStruct();
 	switch tracingType
 		case 'MAJOR', psDir = [5 6];

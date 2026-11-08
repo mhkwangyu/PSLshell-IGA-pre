@@ -1,4 +1,7 @@
 function PreProcessData()
+%% 【论文 §2, §3】预处理：建单元质心、节点-单元邻接表(nodStruct)、单元-边-邻接(eleStruct)、
+%% 剖分三角化、单元特征尺寸/曲率标定、以及 vis 用的 silhouette 等派生结构。
+%% 这些连接表是 §3.2"沿共享边搬运"的高效实现基础。
 	global state_;
 	global state_;
 	global state_;

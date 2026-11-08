@@ -1,4 +1,6 @@
 function [targetDirection, terminationCond] = BidirectionalFeatureProcessing_Advanced(d0Local, v1Local, localFrame0, iLocalFrame, eRef, refEdgeID)
+%% 【论文 §3.4, Eq.17-21】方向正则（跨单元/折痕情形）：含 30° 近共面快路径(跳过旋转)
+%% 与 Rodrigues 旋转 W(h,α)=I+sinα·H+(1-cosα)H² 把上一单元方向"掰"到当前切平面再比较。
 	terminationCond = 0;
 	
 	n0 = localFrame0(:,3);

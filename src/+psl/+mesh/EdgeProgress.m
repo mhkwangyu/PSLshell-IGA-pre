@@ -1,4 +1,5 @@
 function s = EdgeProgress(t, edgeId, xi, eta)
+%% 【论文 §3.2】自然坐标中沿某条边按参数 t 前进（跨单元搬运的辅助工具）。
 	if 'T3'==t || 'T6'==t
         switch edgeId
             case 1, s = xi;          % along base 1->2

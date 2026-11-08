@@ -1,4 +1,5 @@
 function [edgeID, paraCoord1Fallback, successfulIntersection] = DetectIntersectedEdgeInNaturalFrame(p1, p2, eleType)
+%% 【论文 §3.2, 图3】求线段 s_n→s_{n+1} 与当前等参单元顶点边的交点（跨单元四步的第1步）。
 	edgeID = 0;
 	paraCoord1Fallback = [];
 	successfulIntersection = true;

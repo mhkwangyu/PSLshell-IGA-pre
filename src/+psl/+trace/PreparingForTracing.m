@@ -1,4 +1,5 @@
 function [seed0, phyCoord, localCoord, localFrame, t1, t2, localStressTensor, localPrincipalStress, localVonMisesStress, opt] = PreparingForTracing(startPoint)
+%% 【论文 §3.3】追踪前准备：由种子算初始物理坐标/局部系/应力/主方向，并做边界安全兜底。
 	global state_;
 	global state_;
 	global state_;

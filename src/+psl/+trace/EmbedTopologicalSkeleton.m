@@ -1,4 +1,5 @@
 function EmbedTopologicalSkeleton()
+%% 【论文 §4.2, §5】把拓扑骨架并入主/次 PSL 池并同步种子价态（骨架优先的落地）。
 	global state_;
 	global state_;
 	global state_;

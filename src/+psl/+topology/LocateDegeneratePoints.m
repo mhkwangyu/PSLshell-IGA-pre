@@ -1,4 +1,6 @@
 function LocateDegeneratePoints()
+%% 【论文 §4.1, Eq.24】定位退化点：偏应力向量 g=(f1,f2)=(½(σxx-σyy), σxy) 的零点
+%% 即两主应力相等（莫尔圆半径=0）处。T6/Q8 细分子域各至多一根，共享边去重。
 	global state_;
 	global state_;
 	global state_;

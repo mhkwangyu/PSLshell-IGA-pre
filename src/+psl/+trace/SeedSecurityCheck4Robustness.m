@@ -1,4 +1,5 @@
 function [e0out, paraCoord0out, localFrame0out, t1out, t2out, v0out] = SeedSecurityCheck4Robustness(e0in, paraCoord0in, localFrame0in, t1in, t2in, v0in)
+%% 【论文 §3.2】种子鲁棒性检查：把种子归一化到合法单元内、法向一致、边点微调。
 	%% This function is introduced to counteract the situation where the seed point is exactly located at the element 
 	%% edge or vertex meanwhile the initial direction is outward
 	global state_;

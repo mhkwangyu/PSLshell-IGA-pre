@@ -1,4 +1,5 @@
 function [xi,eta] = NatFromProgress(t, edgeId, s)
+%% 【论文 §3.2】由边参数 t 反解出该边上的自然坐标 (ξ,η)（EdgeProgress 的逆）。
     s = max(0, min(1, s));  % tiny clamp
 	if 'T3'==t || 'T6'==t
         switch edgeId

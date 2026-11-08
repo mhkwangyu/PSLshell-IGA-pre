@@ -1,4 +1,5 @@
 function iVonMisesStress = ComputeVonMisesStressLocalFrame(iStressTensor)
+%% 【论文 图1】von Mises 等效应力（供着色可视化）。
 	switch size(iStressTensor,2)
 		case 3 %%Local Frame
 			%% Per-row: sigma_xx, sigma_yy, sigma_xy

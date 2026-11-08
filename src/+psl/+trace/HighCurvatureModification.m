@@ -1,4 +1,5 @@
 function modifiedValences = HighCurvatureModification(spps2BeMerged, psDir)
+%% 【论文 §5】高曲率区的种子价态修正：避免相邻薄壁/折边处种子被遗漏。
 	global state_;
 	global state_;
 	global state_;

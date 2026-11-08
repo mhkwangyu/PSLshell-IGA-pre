@@ -1,4 +1,6 @@
 function [iPhyCoord, iLocalFrame, t1, t2, iStressTensor, iVonMisesStress, iPrincipalStress] = RetrievePhyInfoAtUpdatedPt(e0, paraCoord1, e0Type)
+%% 【论文 §2.3, Eq.10】更新点处的定向信息检索：物理坐标、局部系、应力张量、
+%% von Mises、主应力/主方向。核心是一致应力插值（节点应力→全局系插值→投影回局部系）。
 	global state_;
 	global state_;
 	global state_;

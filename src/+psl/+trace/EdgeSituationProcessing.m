@@ -1,4 +1,5 @@
 function [e0, e0Type, paraCoord1, e0_edgeIDlocal, optAtBoundary, paraCoord1Fallback] = EdgeSituationProcessing(e0, paraCoord0, paraCoord1, e0Type)
+%% 【论文 §3.2, 图3】越界情形统一处理：找交点→映射边→搬运到相邻单元/判定达边界。
 	global state_;
 	tolBoundaryCloseness = 1.0e-2;
 	optAtBoundary = false;

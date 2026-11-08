@@ -1,4 +1,5 @@
 function parasOut = AvoidExactLocationAtVertexOrEdge4Robustness(parasIn, eleType, safetyScaling)
+%% 【论文 §3.2】把恰好落在顶点/边上的自然坐标微调入内部，避免跨单元判定时的退化歧义（鲁棒性补丁）。
 	xi = parasIn(1);
 	eta = parasIn(2);
 	tolEff = safetyScaling;

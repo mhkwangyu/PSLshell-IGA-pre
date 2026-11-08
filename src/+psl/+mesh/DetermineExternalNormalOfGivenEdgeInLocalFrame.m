@@ -1,4 +1,5 @@
 function eNormal = DetermineExternalNormalOfGivenEdgeInLocalFrame(e0, edgeID)
+%% 【论文 §3.2】求给定边在局部系中的外法向（跨单元方向判定辅助）。
 	global state_;
 	global state_;
 	global state_;

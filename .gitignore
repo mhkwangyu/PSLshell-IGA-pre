@@ -25,6 +25,9 @@ report/
 # WorkBuddy project data (NOT part of the codebase)
 .workbuddy/
 
+# 论文精读文稿（含原文插图，仅作本地注释依据，版权归原作者，不入库）
+paper_reading/
+
 # OS
 .DS_Store
 Thumbs.db

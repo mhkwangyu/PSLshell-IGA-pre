@@ -1,5 +1,9 @@
 function [phyCoordList, eleIndexList, paraCoordList, localFrameList, localStressTensorList, localPrincipalStressList, ...
 	localVonMisesStressList] = Tracing(e0, paraCoord0, localFrame0, t1, t2, v0, psDir)
+%% 【论文 §3, 图5】单个方向的积分主循环（Euler/RK2）。
+%% 步长 δ_e = Ce/(scalingStepSize*curvatureScaling) 自适应（Eq.23 思想）；
+%% 越界则走 EdgeSituationProcessing 搬运，否则方向正则后继续；三个终止出口：
+%% 到达边界 / 方向突变(>permittedMaxAdjacentTangentAngleDeviation) / 步数耗尽。
 	global state_;
 	global state_;
 	global state_;

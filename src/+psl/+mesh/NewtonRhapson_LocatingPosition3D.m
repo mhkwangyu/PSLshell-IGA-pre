@@ -1,4 +1,6 @@
 function [paras, inside] = NewtonRhapson_LocatingPosition3D(eleNodeCoords, target, iEleType)
+%% 【论文 §3.1】阻尼 Newton 求目标应力状态对应的自然坐标（三维定位的通用求根器，
+%% 用于退化点搜索与特定位置反解；与"追踪时无需反解"互补）。
 	% Project a 3D point 'target' onto an isoparametric shell element
 	% (T3, T6, Q4, Q8). Returns natural coords [s t] and 'inside' flag
 	% (true if converged and (s,t) lies in the element domain).

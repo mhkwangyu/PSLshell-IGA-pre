@@ -1,4 +1,5 @@
 function oPSLs = CompactStreamlines(iPSLs, truncatedThreshold)
+%% 【论文 §5】抽稀：过滤积分点数过少(<=truncatedThreshold)的碎短轨迹。
 	tarIndice = [];
 	for ii=1:numel(iPSLs)
 		if iPSLs(ii).numIntergPts > truncatedThreshold

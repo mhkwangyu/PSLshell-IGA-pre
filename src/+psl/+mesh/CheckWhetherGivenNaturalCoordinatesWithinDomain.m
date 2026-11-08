@@ -1,4 +1,6 @@
 function inside = CheckWhetherGivenNaturalCoordinatesWithinDomain(paras, eleType, varargin)
+%% 【论文 §2, Eq.16 收益】判断自然坐标是否落在标准等参单元内：
+%% 三角形 (0,0)-(1,0)-(0,1)，四边形 [-1,1]^2。纯几何判断，是"定位变廉价"的关键。
 	inside  = 0;
 	xi = paras(1); eta = paras(2);
 	if ~(isfinite(xi) && isfinite(eta))

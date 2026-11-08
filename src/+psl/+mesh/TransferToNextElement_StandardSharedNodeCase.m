@@ -1,5 +1,6 @@
 function [e0out, paraCoord0out, localFrame0out, t1out, t2out, v0out] = ...
 	TransferToNextElement_StandardSharedNodeCase(nodeID, e0in, e0Para, localFrame0in, t1in, t2in, v0in)
+%% 【论文 §3.2】跨单元搬运：点落在共享"节点"（非边中点）时的特殊情形处理。
 	global state_;
 	global state_;
 	global state_;

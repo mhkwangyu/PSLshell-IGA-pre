@@ -1,4 +1,5 @@
 function [paras, isDegePt] = NewtonRhapson_LocatingDegPt(iEle, target, varargin)
+%% 【论文 §4.1】阻尼 Newton 求偏应力向量零点（退化点的精确位置）。
 	global state_;
 	global state_;
 	global state_;

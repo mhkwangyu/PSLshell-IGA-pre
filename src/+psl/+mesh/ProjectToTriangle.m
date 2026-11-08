@@ -1,4 +1,5 @@
 function [sp,tp] = ProjectToTriangle(st, A, B, C)
+%% 【论文 附录】把任意点正交投影到三角形（求根/定位辅助）。
 % Orthogonal projection of point st=[s t] onto triangle ABC in R^2
     P = st(:); A2=A(:); B2=B(:); C2=C(:);
     v0 = B2 - A2; v1 = C2 - A2; v2 = P - A2;

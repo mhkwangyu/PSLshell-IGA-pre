@@ -1,4 +1,6 @@
 function ShowPSLs(stressCompBG, stressCompPSLs, lw, miniIntegralPts)
+%% 【论文 图1 及结果渲染】PSL 可视化主函数：网格 silhouette + 主/次 PSL 管状渲染 +
+%% 退化点球 + 拓扑骨架，支持应力云图着色或干净迹线两种风格。
 	%% Syntax:
 	%% stressCompBG: %% 'None', 'Sigma_1', 'Sigma_2', 'Sigma_xx', 'Sigma_yy', 'Sigma_xy', 'Sigma_vM' ('Sigma_3', 'Sigma_zz', 'Sigma_xz', 'Sigma_yz', GLOBAL Stress Input) 
 	%% stressCompPSLs: %% 'None', 'Sigma', 'Sigma_xx', 'Sigma_yy', 'Sigma_xy', 'Sigma_vM'

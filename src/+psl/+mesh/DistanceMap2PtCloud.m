@@ -1,4 +1,8 @@
 function disT = DistanceMap2PtCloud(srcPoints, tarCurve)
+%% 【论文 §5】种子点到已有轨迹的距离图（合并阈值判定用）。
+%% 支持欧氏(Euclidean)与测地(Geodesic)两种度量。论文强调：薄壁件必须用测地距离，
+%% 否则欧氏距离会把上下表面"贴"在一起导致种子被错误合并（详见机翼算例图14）。
+%% 注意：欧氏分支为 O(n×m) 稠密矩阵，第四期性能优化重点。
 	global state_;
 	global state_;
 	switch state_.distanceMetric_

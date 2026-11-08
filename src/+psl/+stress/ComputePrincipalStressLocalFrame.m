@@ -1,4 +1,6 @@
 function psList = ComputePrincipalStressLocalFrame(stressTensors)
+%% 【论文 §2.3, Eq.10 之后】面内/三维应力张量的主应力与主方向特征分解(eig)。
+%% 3 列输入=局部系面内应力[σxx,σyy,σxy]；6 列输入=全局系对称张量 Voigt 形式。
 	numStressTensors = size(stressTensors,1);
 	switch size(stressTensors,2)
 		case 3 %%Local Frame

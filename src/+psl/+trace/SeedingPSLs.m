@@ -1,4 +1,8 @@
 function SeedingPSLs(profile)
+%% 【论文 §5, 图10】拓扑感知播种主循环（ref. 3D-TSV 价态机制）。
+%% 每个种子带二值价态 [major被主PSL穿过, minor被次PSL穿过]，"边画边记账"：
+%% 一条 PSL 生成后合并阈值内种子、置对应价态=1；骨架优先嵌入，再铺满全域。
+%% 间距阈值 = D_min / PSLsDensityCtrl（ω 越大越密）。
 	global state_;
 	global state_;
 	global state_;

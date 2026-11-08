@@ -1,4 +1,5 @@
 function faceNormals = EvaluateMeshNormals()
+%% 【论文 §2.1】批量求每个单元法向（供"检查网格法向外翻"的入口分支使用）。
 	global state_;
 	faceNormals = zeros(state_.numEles_,3);
 	for ii=1:state_.numEles_

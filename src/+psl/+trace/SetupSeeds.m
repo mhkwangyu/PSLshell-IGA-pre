@@ -1,4 +1,5 @@
 function iniSeedPoints = SetupSeeds(seedSparsityCtrl)
+%% 【论文 §5】初始化种子点：按 seedSparsityCtrl 稀疏度取单元中心作为种子。
 	global state_;
 	global state_;
 	iniSeedPoints = zeros(state_.numEles_, 3);

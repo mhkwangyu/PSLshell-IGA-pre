@@ -1,5 +1,6 @@
 function [e0out, paraCoord0out, localFrame0out, t1out, t2out, v0out] = ...
 			TransferToNextElement_StandardSharedEdgeCase(e0in, edgeID, e0Para, e0Type, e1, v0in, localFrame0in)
+%% 【论文 §3.2, 图3】跨单元搬运：标准"共享边"情形——沿共享边把点从 e_n 搬到相邻单元 e_{n+1}。
 	global state_;
 	global state_;
 	global state_;

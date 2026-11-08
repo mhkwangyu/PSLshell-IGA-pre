@@ -1,4 +1,6 @@
 function N = ShapeFunction(paras, elementType)
+%% 【论文 §2, Eq.1】等参形函数 N(ξ,η)。支持 T3(线性)/Q4(双线性)/T6(二次)/Q8(双二次)。
+%% 等参映射 P(ξ,η)=Σ N_i P_i 是"直接在自然坐标里推进"这一核心思想的基础。
 	numSamps = size(paras,1);
 	s = paras(:,1);
 	t = paras(:,2);

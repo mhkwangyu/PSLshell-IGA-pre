@@ -1,4 +1,5 @@
 function [gridX, gridY, gridZ, gridC, gridIndices] = ExpandPSLs2Tubes(PSLs, colorSrc, r)
+%% 【论文 图13e】把 PSL 折线扩展为管状曲面（tube），显式着色。
 	%%Syntax
 	%% [gridX, gridY, gridZ, gridC] = ExpandPSLs2Tubes(PSLs, colorSrc, r)
 	gridX = [];

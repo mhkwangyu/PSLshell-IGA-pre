@@ -1,4 +1,5 @@
 function [alpha0, tVec] = CheckSignedDihedralAngle(e1, e1_edgeID, localFrame1, localFrame2)
+%% 【论文 §3.4, Eq.18】有符号二面角 α=atan2(h·(n1×n2), n1·n2)：凸脊>0，凹谷<0。
 	global state_;
 	global state_;
 	

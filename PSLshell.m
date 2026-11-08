@@ -15,6 +15,14 @@ function PSLshell(fileName, profile, opts)
 %%   PSLshell(stressfileName)                -> custom data file (without .TSV)
 %%   PSLshell(stressfileName, profile)       -> custom tracing profile
 %%   PSLshell(stressfileName, profile, opts) -> opts.showProblem / opts.showPSLs / opts.saveFig
+%
+%% 自动把 src/ 加入路径，使 psl.* 包（+io/+mesh/+stress/+trace/+topology/+vis）可被解析。
+%% 用 mfilename 定位本文件目录，确保任意工作目录下运行都成立。
+srcDir = fullfile(fileparts(mfilename('fullpath')), 'src');
+if ~contains(path, [pathsep srcDir pathsep]) && ~contains(path, [pathsep srcDir])
+    addpath(srcDir);
+end
+
 if nargin < 1 || isempty(fileName), fileName = './data/cylinder_1_Q4'; end
 if nargin < 2 || isempty(profile), profile = pslDefaultProfile(); end
 if nargin < 3 || isempty(opts), opts = struct(); end

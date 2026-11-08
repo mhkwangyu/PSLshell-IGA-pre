@@ -1,4 +1,5 @@
 function ShowPrincipalStressDirectionsByArrowsGlobally(varargin)
+%% 【结果可视化】用箭头显示主应力方向场（辅助自检）。
 	global state_;
 	global state_;
 	global state_;

@@ -1,4 +1,5 @@
 function [patchX, patchY, patchZ] = GetSpheresOfPoints(points, sphereRadius)
+%% 【论文 图7/9】把点集扩展为球（退化点可视化）。
 	numSeedPoints = size(points,1);
 	[sphereX,sphereY,sphereZ] = sphere(10);
 	sphereX = sphereRadius*sphereX;
