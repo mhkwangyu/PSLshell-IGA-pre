@@ -14,6 +14,7 @@ function generate_baseline(caseIds)
 %%   snapshots/<caseId>_psls.png - 300dpi PSL trace figure
 
 root = fileparts(fileparts(mfilename('fullpath')));  % repo root
+addpath(fullfile(root, 'src'));   % psl.* packages
 cases = defineCases();
 
 if nargin < 1 || isempty(caseIds), caseIds = {cases.id}; end

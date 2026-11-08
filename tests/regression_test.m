@@ -19,6 +19,7 @@ function regression_test(caseIds)
 
 root = fileparts(fileparts(mfilename('fullpath')));
 addpath(fullfile(root, 'baseline'));
+addpath(fullfile(root, 'src'));   % psl.* packages (+io/+mesh/+stress/+trace/+topology/+vis)
 
 cases = defCaseIds();
 if nargin >= 1 && ~isempty(caseIds)
