@@ -1,10 +1,13 @@
 function ImportStressFields(fileName)
+%% 【论文 统一文件接口】解析 TSV 文件：网格(顶点/单元)+应力(节点局部或全局)+边界条件
+%% (NodeForces/FixedNodes)+局部系参考向量，兼容标准 FEM 输出（ABAQUS 等）。
 	global state_;
 	global state_;
 	global state_;
 	
 	%%1. Read mesh and cartesian stress field
 	fid = fopen(fileName, 'r');
+	if fid < 0, error('ImportStressFields: 无法打开文件 %s（路径错误或权限不足）', fileName); end
 	%%1.1 Mesh
 	% fgetl(fid);
 	tmp = fscanf(fid, '%s', 1);
@@ -66,12 +69,12 @@ function ImportStressFields(fileName)
 	startReadingLoads = fscanf(fid, '%s %s', 2); 
 	if ~strcmp(startReadingLoads, 'NodeForces:'), error('Un-supported Data!'); end
 	numLoadedNodes = fscanf(fid, '%d', 1);
-	if numLoadedNodes>0, state_.loadingCond_ = fscanf(fid, '%d %e %e %e %e %e %e', [7, numLoadedNodes])'; else, loadingCond_ = []; end
+	if numLoadedNodes>0, state_.loadingCond_ = fscanf(fid, '%d %e %e %e %e %e %e', [7, numLoadedNodes])'; else, state_.loadingCond_ = []; end
 	
 	startReadingFixations = fscanf(fid, '%s %s', 2);
 	if ~strcmp(startReadingFixations, 'FixedNodes:'), error('Un-supported Data!'); end
 	numFixedNodes = fscanf(fid, '%d', 1);
-	if numFixedNodes>0, state_.fixingCond_ = fscanf(fid, '%d %d %d %d %d %d %d', [7, numFixedNodes])'; else, fixingCond_ = []; end
+	if numFixedNodes>0, state_.fixingCond_ = fscanf(fid, '%d %d %d %d %d %d %d', [7, numFixedNodes])'; else, state_.fixingCond_ = []; end
 	
 	startReadingStress = fscanf(fid, '%s %s', 2); 
 	if ~strcmp(startReadingStress, 'CartesianStress:'), error('Un-supported Data!'); end
