@@ -22,7 +22,7 @@ if ~isfield(opts,'showPSLs'),    opts.showPSLs    = 1; end
 if ~isfield(opts,'saveFig'),     opts.saveFig     = ''; end
 
 clear global;
-GlobalVariables();
+initState();
 
 %%1. Import Data
 tStart = tic;
@@ -63,56 +63,19 @@ end %% PSLshell (main function end)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%Source
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function GlobalVariables()
-	global boundingBox_; boundingBox_ = [];
-	global meshType_; meshType_ = [];
-	global frameType_; frameType_ = [];
-	global meshOrder_; meshOrder_ = [];
-	global numNodes_; numNodes_ = 0;
-	global nodeCoords_; nodeCoords_ = [];
-	global numEles_; numEles_ = 0;
-	global eNodMat_; eNodMat_ = [];
-	global eleCentroids_; eleCentroids_ = [];
-	global meshTypeMap_; meshTypeMap_ = [];
-	global localStressField_; localStressField_ = [];
-	global globalStressField_; globalStressField_ = [];
-	global seedPointsRef_; seedPointsRef_ = [];
-	global silhouetteStruct_; silhouetteStruct_ = [];
-	global eleCharacterSizeList_; eleCharacterSizeList_ = [];
-	global shellEleNormals_; shellEleNormals_ = [];
-	global shellCurvatureScaling_; shellCurvatureScaling_ = [];
-		
-	global nodStruct_; nodStruct_ = [];
-	global eleStruct_; eleStruct_ = [];
-	global boundaryElements_; boundaryElements_ = [];
-	
-	%% 2. Macros
-	global refVec_; refVec_ = [1 0 0]; refVec_ = refVec_/norm(refVec_);
-	global refVecFallback_; refVecFallback_ = [0 0 1]; refVecFallback_ = refVecFallback_/norm(refVecFallback_);
-	global tolRefVecFallback_; tolRefVecFallback_ = 1.0e-6;
-	
-	%% 3. Algorithm Control
-	%% True: Directly Conduct Stress Interpolation in Local Frame; 
-	%% False: Convert Per-element Stress State to Global Frame, Conduct Element Interpolation, Convert back to Local Frame
-	global tracingSche_; tracingSche_ = 'RK2'; %% 'Euler' 'RK2'
-	global approxiInterp_; approxiInterp_ = 0; 
-	global scalingStepSize4PSL_; scalingStepSize4PSL_ = 5;
-	global limitSteps_; limitSteps_ = 2000; 
-	% %% 2.2 %% Tracing PSL stops when the angle deviation between the neighboring tangents is larger than permittedMaxAdjacentTangentAngleDeviation_
-	global permittedMaxAdjacentTangentAngleDeviation_; permittedMaxAdjacentTangentAngleDeviation_ = 45; %% in degree
-	
-	% %% 3. Result
-	global majorPSLpool_; majorPSLpool_ = PrincipalStressLineStruct();
-	global minorPSLpool_; minorPSLpool_ = PrincipalStressLineStruct();
-	global candidateElementsIncDegePts_; candidateElementsIncDegePts_ = [];
-	global degePts_; degePts_ = [];
+function initState()
+%% Construct the computation-state handle (replaces the former GlobalVariables).
+%% Defensive: if a previous handle is still referenced, destroy it first to
+%% avoid accumulating State handles across repeated calls in one session.
+global state_;
+	if ~isempty(state_), delete(state_); end
+	state_ = State();
 end
 
-
 function ImportStressFields(fileName)
-	global frameType_ meshOrder_ numNodes_ nodeCoords_ numEles_ eNodMat_ meshTypeMap_;
-	global localStressField_ globalStressField_ loadingCond_ fixingCond_ nodeWiseStressField_;
-	global refVec_ refVecFallback_;
+	global state_;
+	global state_;
+	global state_;
 	
 	%%1. Read mesh and cartesian stress field
 	fid = fopen(fileName, 'r');
@@ -123,53 +86,53 @@ function ImportStressFields(fileName)
 	tmp = fscanf(fid, '%s %s %s', 3);
 	dataType = fscanf(fid, '%s', 1);
 	switch dataType
-		case 'NODE', nodeWiseStressField_ = 1;
-		case 'ELEMENT', nodeWiseStressField_ = 0; %%Element-wise Stress Data
+		case 'NODE', state_.nodeWiseStressField_ = 1;
+		case 'ELEMENT', state_.nodeWiseStressField_ = 0; %%Element-wise Stress Data
 		otherwise, error('Un-supported Stress Data!');
 	end
 	domainType = fscanf(fid, '%s', 1);
 	if ~strcmp(domainType, 'Shell'), error('Un-supported Data!'); end
 	%meshType_ = fscanf(fid, '%s', 1);
 	%if ~(strcmp(meshType_, 'Quad') || strcmp(meshType_, 'Tri') || strcmp(meshType_, 'Hybrid')), error('Un-supported Mesh!'); end
-	meshOrder_ = fscanf(fid, '%d', 1);
-	if ~(1==meshOrder_ || 2==meshOrder_), error('Un-supported Mesh!'); end
-	tmp = fscanf(fid, '%s', 1); frameType_ = fscanf(fid, '%s', 1);
-	if strcmp(frameType_, 'LOCAL')
-		tmp = fscanf(fid, '%s %s', 2); refVec_ = fscanf(fid, '%e %e %e', [3, 1])';
-		tmp = fscanf(fid, '%s %s', 2); refVecFallback_ = fscanf(fid, '%e %e %e', [3, 1])';
+	state_.meshOrder_ = fscanf(fid, '%d', 1);
+	if ~(1==state_.meshOrder_ || 2==state_.meshOrder_), error('Un-supported Mesh!'); end
+	tmp = fscanf(fid, '%s', 1); state_.frameType_ = fscanf(fid, '%s', 1);
+	if strcmp(state_.frameType_, 'LOCAL')
+		tmp = fscanf(fid, '%s %s', 2); state_.refVec_ = fscanf(fid, '%e %e %e', [3, 1])';
+		tmp = fscanf(fid, '%s %s', 2); state_.refVecFallback_ = fscanf(fid, '%e %e %e', [3, 1])';
 	end
 	startReadingVertices = fscanf(fid, '%s', 1);
 	if ~strcmp(startReadingVertices, 'Vertices:'), error('Un-supported Data!'); end
-	numNodes_ = fscanf(fid, '%d', 1);
-	nodeCoords_ = fscanf(fid, '%e %e %e', [3, numNodes_])'; 
+	state_.numNodes_ = fscanf(fid, '%d', 1);
+	state_.nodeCoords_ = fscanf(fid, '%e %e %e', [3, state_.numNodes_])'; 
 	startReadingElements = fscanf(fid, '%s', 1);
 	if ~strcmp(startReadingElements, 'Elements:'), error('Un-supported Data!'); end
-	numEles_ = fscanf(fid, '%d', 1);
-	switch meshOrder_
+	state_.numEles_ = fscanf(fid, '%d', 1);
+	switch state_.meshOrder_
 		case 1
-			eNodMat_ = NaN(numEles_, 4);
-			meshTypeMap_ = repmat("Q4", numEles_,1);
-			for ii=1:numEles_
+			state_.eNodMat_ = NaN(state_.numEles_, 4);
+			state_.meshTypeMap_ = repmat("Q4", state_.numEles_,1);
+			for ii=1:state_.numEles_
 				iNumNodesPerEle = fscanf(fid, '%d', 1);
 				switch iNumNodesPerEle
 					case 3
-						eNodMat_(ii,1:3) = fscanf(fid, '%d %d %d', [3, 1])';
-						meshTypeMap_(ii) = "T3";
+						state_.eNodMat_(ii,1:3) = fscanf(fid, '%d %d %d', [3, 1])';
+						state_.meshTypeMap_(ii) = "T3";
 					case 4
-						eNodMat_(ii,1:4) = fscanf(fid, '%d %d %d %d', [4, 1])';
+						state_.eNodMat_(ii,1:4) = fscanf(fid, '%d %d %d %d', [4, 1])';
 				end
 			end					
 		case 2
-			eNodMat_ = NaN(numEles_, 8);
-			meshTypeMap_ = repmat("Q8", numEles_,1);
-			for ii=1:numEles_
+			state_.eNodMat_ = NaN(state_.numEles_, 8);
+			state_.meshTypeMap_ = repmat("Q8", state_.numEles_,1);
+			for ii=1:state_.numEles_
 				iNumNodesPerEle = fscanf(fid, '%d', 1);
 				switch iNumNodesPerEle
 					case 6
-						eNodMat_(ii,1:6) = fscanf(fid, '%d %d %d %d %d %d', [6, 1])';
-						meshTypeMap_(ii) = "T6";
+						state_.eNodMat_(ii,1:6) = fscanf(fid, '%d %d %d %d %d %d', [6, 1])';
+						state_.meshTypeMap_(ii) = "T6";
 					case 8
-						eNodMat_(ii,1:8) = fscanf(fid, '%d %d %d %d %d %d %d %d', [8, 1])';
+						state_.eNodMat_(ii,1:8) = fscanf(fid, '%d %d %d %d %d %d %d %d', [8, 1])';
 				end
 			end					
 	end
@@ -177,47 +140,47 @@ function ImportStressFields(fileName)
 	startReadingLoads = fscanf(fid, '%s %s', 2); 
 	if ~strcmp(startReadingLoads, 'NodeForces:'), error('Un-supported Data!'); end
 	numLoadedNodes = fscanf(fid, '%d', 1);
-	if numLoadedNodes>0, loadingCond_ = fscanf(fid, '%d %e %e %e %e %e %e', [7, numLoadedNodes])'; else, loadingCond_ = []; end
+	if numLoadedNodes>0, state_.loadingCond_ = fscanf(fid, '%d %e %e %e %e %e %e', [7, numLoadedNodes])'; else, loadingCond_ = []; end
 	
 	startReadingFixations = fscanf(fid, '%s %s', 2);
 	if ~strcmp(startReadingFixations, 'FixedNodes:'), error('Un-supported Data!'); end
 	numFixedNodes = fscanf(fid, '%d', 1);
-	if numFixedNodes>0, fixingCond_ = fscanf(fid, '%d %d %d %d %d %d %d', [7, numFixedNodes])'; else, fixingCond_ = []; end
+	if numFixedNodes>0, state_.fixingCond_ = fscanf(fid, '%d %d %d %d %d %d %d', [7, numFixedNodes])'; else, fixingCond_ = []; end
 	
 	startReadingStress = fscanf(fid, '%s %s', 2); 
 	if ~strcmp(startReadingStress, 'CartesianStress:'), error('Un-supported Data!'); end
 	numValidNods = fscanf(fid, '%d', 1);
-	switch frameType_
+	switch state_.frameType_
 		case 'LOCAL'
 			%% Per-row: sigma_xx, sigma_yy, sigma_xy
-			localStressField_ = fscanf(fid, '%e %e %e', [3, numValidNods])';
+			state_.localStressField_ = fscanf(fid, '%e %e %e', [3, numValidNods])';
 		case 'GLOBAL'
 			%% Per-row: sigma_xx, sigma_yy, sigma_zz, sigma_yz, sigma_zx, sigma_xy
-			globalStressField_ = fscanf(fid, '%e %e %e %e %e %e', [6, numValidNods])';
+			state_.globalStressField_ = fscanf(fid, '%e %e %e %e %e %e', [6, numValidNods])';
 	end
 	fclose(fid);	
 end
 
 
 function PreProcessData()
-	global boundingBox_ frameType_ meshOrder_;
-	global numNodes_ nodeCoords_ numEles_ eNodMat_ eleCentroids_ meshTypeMap_ voidEleMap_;
-	global localStressField_ globalStressField_ localStressFieldPerEle_ globalStressFieldPerEle_;
-	global silhouetteStruct_ eleCharacterSizeList_ refScalingSize_ shellEleNormals_ shellCurvatureScaling_;
-	global nodStruct_ eleStruct_ boundaryElements_; 
-	global triangularizedMesh_ triangularizedMeshGraph_;
+	global state_;
+	global state_;
+	global state_;
+	global state_;
+	global state_;
+	global state_;
 	
 	%%1. Extract Silhouette for Vis.
-	boundingBox_ = [min(nodeCoords_, [], 1); max(nodeCoords_, [], 1)];
-	silhouetteStruct_.vertices = nodeCoords_;
-	silhouetteStruct_.faces = eNodMat_;
-	if 2==meshOrder_
-		silhouetteStruct_.faces('Q8'==meshTypeMap_,:) = silhouetteStruct_.faces('Q8'==meshTypeMap_,[1 5 2 6 3 7 4 8]);
-		silhouetteStruct_.faces('T6'==meshTypeMap_,:) = silhouetteStruct_.faces('T6'==meshTypeMap_,[1 4 2 5 3 6 7 8]);	
+	state_.boundingBox_ = [min(state_.nodeCoords_, [], 1); max(state_.nodeCoords_, [], 1)];
+	state_.silhouetteStruct_.vertices = state_.nodeCoords_;
+	state_.silhouetteStruct_.faces = state_.eNodMat_;
+	if 2==state_.meshOrder_
+		state_.silhouetteStruct_.faces('Q8'==state_.meshTypeMap_,:) = state_.silhouetteStruct_.faces('Q8'==state_.meshTypeMap_,[1 5 2 6 3 7 4 8]);
+		state_.silhouetteStruct_.faces('T6'==state_.meshTypeMap_,:) = state_.silhouetteStruct_.faces('T6'==state_.meshTypeMap_,[1 4 2 5 3 6 7 8]);	
 	end
-	eleCentroids_ = zeros(numEles_, 3);
-	for ii=1:numEles_
-		iEleType = meshTypeMap_(ii);
+	state_.eleCentroids_ = zeros(state_.numEles_, 3);
+	for ii=1:state_.numEles_
+		iEleType = state_.meshTypeMap_(ii);
 		switch iEleType
 			case 'T3'
 				iNumNodesPerEle = 3;
@@ -233,14 +196,14 @@ function PreProcessData()
 				iParas = [0 0];
 		end
 		iSF = ShapeFunction(iParas, iEleType);
-		eleCentroids_(ii,:) = iSF * nodeCoords_(eNodMat_(ii,1:iNumNodesPerEle),:);
+		state_.eleCentroids_(ii,:) = iSF * state_.nodeCoords_(state_.eNodMat_(ii,1:iNumNodesPerEle),:);
 	end
 	
 	%%2. Relate the Shared Element for each Vertex Node in unstructured shell mesh
 	iNodStruct = struct('adjacentEles', []);
-	nodStruct_ = repmat(iNodStruct, numNodes_, 1);
-	for ii=1:numEles_
-		switch meshTypeMap_(ii)
+	state_.nodStruct_ = repmat(iNodStruct, state_.numNodes_, 1);
+	for ii=1:state_.numEles_
+		switch state_.meshTypeMap_(ii)
 			case 'T3'
 				iNumVertexNodesPerEle = 3;
 			case 'Q4'
@@ -251,49 +214,49 @@ function PreProcessData()
 				iNumVertexNodesPerEle = 4;
 		end
 		for jj=1:iNumVertexNodesPerEle
-			nodStruct_(eNodMat_(ii,jj)).adjacentEles(1,end+1) = ii;
+			state_.nodStruct_(state_.eNodMat_(ii,jj)).adjacentEles(1,end+1) = ii;
 		end	
 	end
 	
 	%%3. Relate the Shared Element of each Edge
 	iEleStruct = struct('type', 0, 'edge2nextEle', zeros(1,4), 'edgeIDsOfNextEle', zeros(1,4), 'vtxEdgesGlobal', zeros(4,2));
-	eleStruct_ = repmat(iEleStruct, numEles_, 1);
-	for ii=1:numEles_
-		switch meshTypeMap_(ii)
+	state_.eleStruct_ = repmat(iEleStruct, state_.numEles_, 1);
+	for ii=1:state_.numEles_
+		switch state_.meshTypeMap_(ii)
 			case 'T3'
-				eleStruct_(ii).type = 3; %%T3
+				state_.eleStruct_(ii).type = 3; %%T3
 				iNumVertexEdgesPerEle = 3;
-				iNodesPerEle = eNodMat_(ii,1:3);
+				iNodesPerEle = state_.eNodMat_(ii,1:3);
 				edgePerEle = iNodesPerEle([1 2; 2 3; 3 1]);
-				eleStruct_(ii).edge2nextEle(end) = [];
-				eleStruct_(ii).edgeIDsOfNextEle(end) = [];
-				eleStruct_(ii).vtxEdgesGlobal = edgePerEle;
+				state_.eleStruct_(ii).edge2nextEle(end) = [];
+				state_.eleStruct_(ii).edgeIDsOfNextEle(end) = [];
+				state_.eleStruct_(ii).vtxEdgesGlobal = edgePerEle;
 			case 'Q4'
-				eleStruct_(ii).type = 4; %%Q4
+				state_.eleStruct_(ii).type = 4; %%Q4
 				iNumVertexEdgesPerEle = 4;
-				iNodesPerEle = eNodMat_(ii,1:4);
+				iNodesPerEle = state_.eNodMat_(ii,1:4);
 				edgePerEle = iNodesPerEle([1 2; 2 3; 3 4; 4 1]);
-				eleStruct_(ii).vtxEdgesGlobal = edgePerEle;
+				state_.eleStruct_(ii).vtxEdgesGlobal = edgePerEle;
 			case 'T6'
-				eleStruct_(ii).type = 6; %%T6
+				state_.eleStruct_(ii).type = 6; %%T6
 				iNumVertexEdgesPerEle = 3;
-				iNodesPerEle = eNodMat_(ii,1:3);
+				iNodesPerEle = state_.eNodMat_(ii,1:3);
 				edgePerEle = iNodesPerEle([1 2; 2 3; 3 1]);
-				eleStruct_(ii).edge2nextEle(end) = [];
-				eleStruct_(ii).edgeIDsOfNextEle(end) = [];
-				eleStruct_(ii).vtxEdgesGlobal(end,:) = [];
-				eleStruct_(ii).vtxEdgesGlobal = edgePerEle;
+				state_.eleStruct_(ii).edge2nextEle(end) = [];
+				state_.eleStruct_(ii).edgeIDsOfNextEle(end) = [];
+				state_.eleStruct_(ii).vtxEdgesGlobal(end,:) = [];
+				state_.eleStruct_(ii).vtxEdgesGlobal = edgePerEle;
 			case 'Q8'
-				eleStruct_(ii).type = 8; %%Q8
+				state_.eleStruct_(ii).type = 8; %%Q8
 				iNumVertexEdgesPerEle = 4;
-				iNodesPerEle = eNodMat_(ii,1:4);
+				iNodesPerEle = state_.eNodMat_(ii,1:4);
 				edgePerEle = iNodesPerEle([1 2; 2 3; 3 4; 4 1]);
-				eleStruct_(ii).vtxEdgesGlobal = edgePerEle;
+				state_.eleStruct_(ii).vtxEdgesGlobal = edgePerEle;
 		end
 		for jj=1:iNumVertexEdgesPerEle
 			iEdge = edgePerEle(jj,:);
-			eleGroup1 = nodStruct_(iEdge(1)).adjacentEles;
-			eleGroup2 = nodStruct_(iEdge(2)).adjacentEles;
+			eleGroup1 = state_.nodStruct_(iEdge(1)).adjacentEles;
+			eleGroup2 = state_.nodStruct_(iEdge(2)).adjacentEles;
 			sharedEles = intersect(eleGroup1, eleGroup2);
 			numSharedEles = numel(sharedEles);				
 			if 2==numSharedEles
@@ -301,25 +264,25 @@ function PreProcessData()
 				if 1~=numel(nextEle)
 					error('Un-expected Error in Mesh Structure 1!');
 				end
-				eleStruct_(ii).edge2nextEle(jj) = nextEle;
-				switch meshTypeMap_(nextEle)
+				state_.eleStruct_(ii).edge2nextEle(jj) = nextEle;
+				switch state_.meshTypeMap_(nextEle)
 					case 'T3'
-						iNodesNextEle = eNodMat_(nextEle,1:3);
+						iNodesNextEle = state_.eNodMat_(nextEle,1:3);
 						edgesNextEle = iNodesNextEle([1 2; 2 3; 3 1]);
 					case 'Q4'
-						iNodesNextEle = eNodMat_(nextEle,1:4);
+						iNodesNextEle = state_.eNodMat_(nextEle,1:4);
 						edgesNextEle = iNodesNextEle([1 2; 2 3; 3 4; 4 1]);
 					case 'T6'
-						iNodesNextEle = eNodMat_(nextEle,1:3);
+						iNodesNextEle = state_.eNodMat_(nextEle,1:3);
 						edgesNextEle = iNodesNextEle([1 2; 2 3; 3 1]);					
 					case 'Q8'
-						iNodesNextEle = eNodMat_(nextEle,1:4);
+						iNodesNextEle = state_.eNodMat_(nextEle,1:4);
 						edgesNextEle = iNodesNextEle([1 2; 2 3; 3 4; 4 1]);					
 				end
 				edgeInCurrentEle = sort(iEdge);
 				edgesNextEle = sort(edgesNextEle,2);
 				[~, localEdgeIDinNextEle] = intersect(edgesNextEle, edgeInCurrentEle, 'rows');
-				eleStruct_(ii).edgeIDsOfNextEle(jj) = localEdgeIDinNextEle;
+				state_.eleStruct_(ii).edgeIDsOfNextEle(jj) = localEdgeIDinNextEle;
 			elseif 1==numSharedEles
 				if sharedEles~=ii
 					error('Un-expected Error in Mesh Structure 2!');
@@ -331,50 +294,50 @@ function PreProcessData()
 	end
 	
 	%%3.1 Extract Boundary Elements for Testing
-	eleState = zeros(numEles_,1);
-	for ii=1:numEles_
-		if ~isempty(find(0==eleStruct_(ii).edge2nextEle))
+	eleState = zeros(state_.numEles_,1);
+	for ii=1:state_.numEles_
+		if ~isempty(find(0==state_.eleStruct_(ii).edge2nextEle))
 			eleState(ii) = 1;
 		end
 	end
-	boundaryElements_ = find(1==eleState);	
+	state_.boundaryElements_ = find(1==eleState);	
 	
 	%%4. Evaluate the Character Size of each Element (used in PSL tracing process)
 	%% Roughly Minimum Edge
-	eleCharacterSizeList_ = zeros(numEles_,1);
-	for ii=1:numEles_
-		switch meshTypeMap_(ii)
+	state_.eleCharacterSizeList_ = zeros(state_.numEles_,1);
+	for ii=1:state_.numEles_
+		switch state_.meshTypeMap_(ii)
 			case 'T3'
-				iNodesPerEle = eNodMat_(ii,1:3);
+				iNodesPerEle = state_.eNodMat_(ii,1:3);
 				edgePerEle = [1 2; 2 3; 3 1];
 			case 'Q4'
-				iNodesPerEle = eNodMat_(ii,1:4);
+				iNodesPerEle = state_.eNodMat_(ii,1:4);
 				edgePerEle = [1 2; 2 3; 3 4; 4 1];
 			case 'T6'
-				iNodesPerEle = eNodMat_(ii,1:3);
+				iNodesPerEle = state_.eNodMat_(ii,1:3);
 				edgePerEle = [1 2; 2 3; 3 1];
 			case 'Q8'
-				iNodesPerEle = eNodMat_(ii,1:4);
+				iNodesPerEle = state_.eNodMat_(ii,1:4);
 				edgePerEle = [1 2; 2 3; 3 4; 4 1];
 		end
-		iEleNodeCoords = nodeCoords_(iNodesPerEle,:);
+		iEleNodeCoords = state_.nodeCoords_(iNodesPerEle,:);
 		iEleEdgeLengths = vecnorm(iEleNodeCoords(edgePerEle(:,2),:)-iEleNodeCoords(edgePerEle(:,1),:),2,2);
-		eleCharacterSizeList_(ii) = min(iEleEdgeLengths);
+		state_.eleCharacterSizeList_(ii) = min(iEleEdgeLengths);
 	end
-	refScalingSize_ = mean(eleCharacterSizeList_);	
+	state_.refScalingSize_ = mean(state_.eleCharacterSizeList_);	
 	
 	%%5. Evaluate the Curvature of each higher-order Element (used in PSL tracing process, scale the tracing step size)
 	%% Rougly Maximum Directional Deviation of the Sampled Shell Normals per Element
 	%% Scaling range: 1-5
 	maxScalingFactor = 5;
-	shellEleNormals_ = struct('normals', [], 'paras', []);
-	shellEleNormals_ = repmat(shellEleNormals_, numEles_, 1);
-	shellCurvatureScaling_ = ones(numEles_, 1);
-	if meshOrder_>1
-		for ii=1:numEles_
-			switch meshTypeMap_(ii)
+	state_.shellEleNormals_ = struct('normals', [], 'paras', []);
+	state_.shellEleNormals_ = repmat(state_.shellEleNormals_, state_.numEles_, 1);
+	state_.shellCurvatureScaling_ = ones(state_.numEles_, 1);
+	if state_.meshOrder_>1
+		for ii=1:state_.numEles_
+			switch state_.meshTypeMap_(ii)
 				case 'T6'
-					iEleNodes = nodeCoords_(eNodMat_(ii,1:6),:);
+					iEleNodes = state_.nodeCoords_(state_.eNodMat_(ii,1:6),:);
 					sampledPts = [
 						1/3		1/3
 						1/6		1/6
@@ -383,7 +346,7 @@ function PreProcessData()
 					];
 					[faceNormList, ~, ~] = ComputeNormalsAtGivenPosition(sampledPts, iEleNodes, 'T6');
 				case 'Q8'
-					iEleNodes = nodeCoords_(eNodMat_(ii,:),:);
+					iEleNodes = state_.nodeCoords_(state_.eNodMat_(ii,:),:);
 					sampledPts = [ %%Natural Coordinates
 						 0.0	 			 0.0
 						-0.5773502691896258	-0.5773502691896258
@@ -393,8 +356,8 @@ function PreProcessData()
 					];
 					[faceNormList, ~, ~] = ComputeNormalsAtGivenPosition(sampledPts, iEleNodes, 'Q8');
 			end
-			shellEleNormals_(ii).normal = faceNormList;
-			shellEleNormals_(ii).paras = sampledPts;
+			state_.shellEleNormals_(ii).normal = faceNormList;
+			state_.shellEleNormals_(ii).paras = sampledPts;
 			
 			refNorm = faceNormList(1,:);
 			testNorm = faceNormList(2:end,:);
@@ -403,106 +366,106 @@ function PreProcessData()
 			if iMaxDirDev > 45
 				warning(['Element ', sprintf('%4i',ii), ' is highly curved!']);
 			end
-			shellCurvatureScaling_(ii) = max(iMaxDirDev, 1);
+			state_.shellCurvatureScaling_(ii) = max(iMaxDirDev, 1);
 		end
 	end
-	maxDirectionalDev = max(shellCurvatureScaling_);
+	maxDirectionalDev = max(state_.shellCurvatureScaling_);
 	if maxDirectionalDev > 1
-		tmp = 1 + (maxScalingFactor-1)*(shellCurvatureScaling_-1)/(maxDirectionalDev-1);
-		shellCurvatureScaling_ = tmp;
+		tmp = 1 + (maxScalingFactor-1)*(state_.shellCurvatureScaling_-1)/(maxDirectionalDev-1);
+		state_.shellCurvatureScaling_ = tmp;
 	end
 	
 	%%6. Pre-compute per-element Node Stress Tensors in Global
-	localStressFieldPerEle_ = cell(numEles_,1);
-	globalStressFieldPerEle_ = cell(numEles_,1);
-	voidEleMap_ = false(numEles_,1);
-	for ii=1:numEles_
-		iEleType = meshTypeMap_(ii);
+	state_.localStressFieldPerEle_ = cell(state_.numEles_,1);
+	state_.globalStressFieldPerEle_ = cell(state_.numEles_,1);
+	state_.voidEleMap_ = false(state_.numEles_,1);
+	for ii=1:state_.numEles_
+		iEleType = state_.meshTypeMap_(ii);
 		switch iEleType
 			case 'T3'
-				iEleNodes = eNodMat_(ii,1:3);
+				iEleNodes = state_.eNodMat_(ii,1:3);
 				parasNodes = [0.0 0.0; 1.0 0.0; 0.0 1.0];
-				iEleNodeCoords = nodeCoords_(iEleNodes,:);
+				iEleNodeCoords = state_.nodeCoords_(iEleNodes,:);
 				nodeLocalFrames = zeros(3,3,3);
 				for jj=1:3
 					[nodeLocalFrames(:,:,jj), ~, ~, ~] = ComputeLocalFrameAtGivenPosition(parasNodes(jj,:), iEleNodeCoords, iEleType);
 				end				
 			case 'Q4'
-				iEleNodes = eNodMat_(ii,1:4);
+				iEleNodes = state_.eNodMat_(ii,1:4);
 				parasNodes = [-1.0 -1.0; 1.0 -1.0; 1.0 1.0; -1.0 1.0];
-				iEleNodeCoords = nodeCoords_(iEleNodes,:);	
+				iEleNodeCoords = state_.nodeCoords_(iEleNodes,:);	
 				nodeLocalFrames = zeros(3,3,4);
 				for jj=1:4
 					[nodeLocalFrames(:,:,jj), ~, ~, ~] = ComputeLocalFrameAtGivenPosition(parasNodes(jj,:), iEleNodeCoords, iEleType);
 				end						
 			case 'T6'
-				iEleNodes = eNodMat_(ii,1:6);
+				iEleNodes = state_.eNodMat_(ii,1:6);
 				parasNodes = [0.0 0.0; 1.0 0.0; 0.0 1.0; 0.5 0.0; 0.5 0.5; 0.0 0.5];
-				iEleNodeCoords = nodeCoords_(iEleNodes,:);	
+				iEleNodeCoords = state_.nodeCoords_(iEleNodes,:);	
 				nodeLocalFrames = zeros(3,3,6);
 				for jj=1:6
 					[nodeLocalFrames(:,:,jj), ~, ~, ~] = ComputeLocalFrameAtGivenPosition(parasNodes(jj,:), iEleNodeCoords, iEleType);
 				end				
 			case 'Q8'
-				iEleNodes = eNodMat_(ii,1:8);
+				iEleNodes = state_.eNodMat_(ii,1:8);
 				parasNodes = [-1.0 -1.0; 1.0 -1.0; 1.0 1.0; -1.0 1.0; 0.0 -1.0; 1.0 0.0; 0.0 1.0; -1.0 0.0];
-				iEleNodeCoords = nodeCoords_(iEleNodes,:);				
+				iEleNodeCoords = state_.nodeCoords_(iEleNodes,:);				
 				nodeLocalFrames = zeros(3,3,8);
 				for jj=1:8
 					[nodeLocalFrames(:,:,jj), ~, ~, ~] = ComputeLocalFrameAtGivenPosition(parasNodes(jj,:), iEleNodeCoords, iEleType);
 				end							
 		end
-		switch frameType_
+		switch state_.frameType_
 			case 'LOCAL'
-				iEleStressesLocal = localStressField_(iEleNodes,:);
+				iEleStressesLocal = state_.localStressField_(iEleNodes,:);
 				iEleStressesGlobal = GlobalFrame2Local_StressTensor(iEleStressesLocal, nodeLocalFrames, 0);	
 			case 'GLOBAL'
-				iEleStressesGlobal = globalStressField_(iEleNodes,:);
+				iEleStressesGlobal = state_.globalStressField_(iEleNodes,:);
 				iEleStressesLocal = GlobalFrame2Local_StressTensor(iEleStressesGlobal, nodeLocalFrames, 1);					
 		end
-		localStressFieldPerEle_{ii} = iEleStressesLocal;
-		globalStressFieldPerEle_{ii} = iEleStressesGlobal;
+		state_.localStressFieldPerEle_{ii} = iEleStressesLocal;
+		state_.globalStressFieldPerEle_{ii} = iEleStressesGlobal;
 		if ~isempty(find(0==ComputeVonMisesStressLocalFrame(iEleStressesLocal)))
-			voidEleMap_(ii) = true;
+			state_.voidEleMap_(ii) = true;
 		end
 	end	
 
 	%%7. Triangulation for Geodesic Distance Computing
-	elesQ8 = find('Q8'==meshTypeMap_);
+	elesQ8 = find('Q8'==state_.meshTypeMap_);
 	if ~isempty(elesQ8)
 		numQ8eles = numel(elesQ8);
 		newlyInsertedNodes = zeros(numQ8eles, 3);
 		Q8SFctr = ShapeFunction([0 0], 'Q8');
 		for ii=1:numQ8eles
-			iEleNodes = eNodMat_(elesQ8(ii),1:8);
-			iEleNodeCoords = nodeCoords_(iEleNodes,:);
+			iEleNodes = state_.eNodMat_(elesQ8(ii),1:8);
+			iEleNodeCoords = state_.nodeCoords_(iEleNodes,:);
 			newlyInsertedNodes(ii,:) = Q8SFctr * iEleNodeCoords;
 		end
-		mapQ8 = zeros(numEles_,1);
+		mapQ8 = zeros(state_.numEles_,1);
 		mapQ8(elesQ8,1) = (1:numel(elesQ8))';
 	else
 		newlyInsertedNodes = [];
-		mapQ8 = (1:numEles_)';
+		mapQ8 = (1:state_.numEles_)';
 	end
-	triangularizedNodeCoords = [nodeCoords_; newlyInsertedNodes];
+	triangularizedNodeCoords = [state_.nodeCoords_; newlyInsertedNodes];
 	triangularizedElementsTmp = struct('arr', []);
-	triangularizedElementsTmp = repmat(triangularizedElementsTmp, numEles_, 1);
+	triangularizedElementsTmp = repmat(triangularizedElementsTmp, state_.numEles_, 1);
 	
-	for ii=1:numEles_
-		iEleType = meshTypeMap_(ii);
+	for ii=1:state_.numEles_
+		iEleType = state_.meshTypeMap_(ii);
 		switch iEleType
 			case 'T3'
-				iEleNodes = eNodMat_(ii,1:3);
+				iEleNodes = state_.eNodMat_(ii,1:3);
 			case 'Q4'
-				iEleNodes = eNodMat_(ii,1:4);
+				iEleNodes = state_.eNodMat_(ii,1:4);
 				iEleNodes = iEleNodes([1 2 3  3 4 1]);
 			case 'T6'
-				iEleNodes = eNodMat_(ii,1:6);
+				iEleNodes = state_.eNodMat_(ii,1:6);
 				iEleNodes = iEleNodes([1 4 6  4 2 5  6 5 3  4 5 6]);
 			case 'Q8'
 				iEleNodes = zeros(1,9);
-				iEleNodes(1:8) = eNodMat_(ii,1:8);
-				iEleNodes(9) = numNodes_+mapQ8(ii);
+				iEleNodes(1:8) = state_.eNodMat_(ii,1:8);
+				iEleNodes(9) = state_.numNodes_+mapQ8(ii);
 				iEleNodes = iEleNodes([1 5 8  9 8 5  5 2 9  6 9 2  9 6 7  3 7 6  8 9 4  7 4 9]);
 		end
 		triangularizedElementsTmp(ii).arr = iEleNodes;
@@ -510,40 +473,40 @@ function PreProcessData()
 	triangularizedElements = [triangularizedElementsTmp.arr]';
 	numTriangularizedEles = numel(triangularizedElements)/3;
 	triangularizedElements = reshape(triangularizedElements, 3, numTriangularizedEles)';
-	triangularizedMesh_ = triangulation(triangularizedElements, triangularizedNodeCoords);
-	triangularizedMeshEdges = edges(triangularizedMesh_);
+	state_.triangularizedMesh_ = triangulation(triangularizedElements, triangularizedNodeCoords);
+	triangularizedMeshEdges = edges(state_.triangularizedMesh_);
 	weights = vecnorm(triangularizedNodeCoords(triangularizedMeshEdges(:,1),:) - triangularizedNodeCoords(triangularizedMeshEdges(:,2),:), 2, 2);
-	triangularizedMeshGraph_ = graph(triangularizedMeshEdges(:,1), triangularizedMeshEdges(:,2), weights);
+	state_.triangularizedMeshGraph_ = graph(triangularizedMeshEdges(:,1), triangularizedMeshEdges(:,2), weights);
 end
 
 
 function SeedingPSLs(profile)
-	global boundingBox_ eleCentroids_;
-	global mergingThreshold_ distanceMetric_ limitSteps_
-	global iniSeedPoints_ seedPointsValence_ seedPoints_ seedPointsRef_
-	global majorPSLpool_ minorPSLpool_ majorCoordList_ minorCoordList_
+	global state_;
+	global state_;
+	global state_;
+	global state_;
 	
 	%%1. Initialization
-	limitSteps_ = profile.maxIts;
-	distanceMetric_ = profile.distanceMetric;
-	iniSeedPoints_ = SetupSeeds(profile.seedSparsityCtrl);
-	seedPoints_ = iniSeedPoints_;
-	seedPointsRef_ = [seedPoints_(:,1) eleCentroids_(seedPoints_(:,1),:)];
-	numSeedPoints = size(iniSeedPoints_,1);
+	state_.limitSteps_ = profile.maxIts;
+	state_.distanceMetric_ = profile.distanceMetric;
+	state_.iniSeedPoints_ = SetupSeeds(profile.seedSparsityCtrl);
+	state_.seedPoints_ = state_.iniSeedPoints_;
+	state_.seedPointsRef_ = [state_.seedPoints_(:,1) state_.eleCentroids_(state_.seedPoints_(:,1),:)];
+	numSeedPoints = size(state_.iniSeedPoints_,1);
 	assert(2==numel(profile.PSLtypeCtrl));
-	seedPointsValence_ = repmat(profile.PSLtypeCtrl(:)', numSeedPoints, 1);
-	mergingThreshold_ = min(boundingBox_(2,:)-boundingBox_(1,:))/profile.PSLsDensityCtrl;
-	if 0==mergingThreshold_ %%2D
-		mergingThreshold_ = max(boundingBox_(2,:)-boundingBox_(1,:))/profile.PSLsDensityCtrl;
+	state_.seedPointsValence_ = repmat(profile.PSLtypeCtrl(:)', numSeedPoints, 1);
+	state_.mergingThreshold_ = min(state_.boundingBox_(2,:)-state_.boundingBox_(1,:))/profile.PSLsDensityCtrl;
+	if 0==state_.mergingThreshold_ %%2D
+		state_.mergingThreshold_ = max(state_.boundingBox_(2,:)-state_.boundingBox_(1,:))/profile.PSLsDensityCtrl;
 	end
 	
-	majorPSLpool_ = PrincipalStressLineStruct();
-	minorPSLpool_ = PrincipalStressLineStruct();
-	majorCoordList_ = [];	
-	minorCoordList_ = [];
+	state_.majorPSLpool_ = PrincipalStressLineStruct();
+	state_.minorPSLpool_ = PrincipalStressLineStruct();
+	state_.majorCoordList_ = [];	
+	state_.minorCoordList_ = [];
 	% ShowSeedingProcess(0.75);	
-	[~, startEle] = min(vecnorm(sum(boundingBox_, 1)/2-eleCentroids_, 2, 2));
-	startCoord = eleCentroids_(startEle,:);
+	[~, startEle] = min(vecnorm(sum(state_.boundingBox_, 1)/2-state_.eleCentroids_, 2, 2));
+	startCoord = state_.eleCentroids_(startEle,:);
 	
 	%%2. Topology Analysis
 	if profile.topologyAware
@@ -553,81 +516,81 @@ function SeedingPSLs(profile)
 	% ShowSeedingProcess(0.75);	
 	%%3. Seeding (ref. 3D-TSV)
 	its = 0;
-	looper = sum(seedPointsValence_(:));
+	looper = sum(state_.seedPointsValence_(:));
 	while looper<2*numSeedPoints
 		its = its + 1;
-		valenceMetric = sum(seedPointsValence_,2);
+		valenceMetric = sum(state_.seedPointsValence_,2);
 		unFinishedSpps = find(valenceMetric<2);
 		% spp = unFinishedSpps(1);
 		if 0==looper
-			[~, spp] = min(vecnorm(startCoord-seedPointsRef_(:,end-2:end),2,2));
+			[~, spp] = min(vecnorm(startCoord-state_.seedPointsRef_(:,end-2:end),2,2));
 		else
-			tmp	= seedPointsValence_(unFinishedSpps,:);
+			tmp	= state_.seedPointsValence_(unFinishedSpps,:);
 			tmp = find(1==sum(tmp,2));
 			if ~isempty(tmp), unFinishedSpps = unFinishedSpps(tmp); end
-			[~, tarPos] = min(vecnorm(startCoord-seedPointsRef_(unFinishedSpps,end-2:end),2,2));
+			[~, tarPos] = min(vecnorm(startCoord-state_.seedPointsRef_(unFinishedSpps,end-2:end),2,2));
 			spp = unFinishedSpps(tarPos);
 		end
-		valences = seedPointsValence_(spp,:);
-		iSeed = seedPoints_(spp,:);
+		valences = state_.seedPointsValence_(spp,:);
+		iSeed = state_.seedPoints_(spp,:);
 		if 0==valences(1)
-			seedPointsValence_(spp,1) = 1;
+			state_.seedPointsValence_(spp,1) = 1;
 			majorPSL = CreatePrincipalStressLine(iSeed, 'MAJOR');
 			if 0==majorPSL.numIntergPts
-				looper = sum(seedPointsValence_(:)); 
+				looper = sum(state_.seedPointsValence_(:)); 
 				disp([' Iteration.: ' sprintf('%4i',its) ' Progress.: ' sprintf('%6i',looper) ...
 					' Total.: ' sprintf('%6i',2*numSeedPoints)]); continue; 			
 			end
-			majorPSLpool_(end+1,1) = majorPSL;
-			majorCoordList_(end+1:end+majorPSL.numIntergPts,:) = majorPSL.phyCoordList;
-			sppsEmptyMajorValence = find(0==seedPointsValence_(:,1));
+			state_.majorPSLpool_(end+1,1) = majorPSL;
+			state_.majorCoordList_(end+1:end+majorPSL.numIntergPts,:) = majorPSL.phyCoordList;
+			sppsEmptyMajorValence = find(0==state_.seedPointsValence_(:,1));
 			if ~isempty(sppsEmptyMajorValence)
 				[potentialDisListMajor, potentialPosListMajor, potentialPosListMajorPara] = GetDisListOfPointList2Curve(...	
-					seedPointsRef_(sppsEmptyMajorValence,:), [majorPSL.eleIndexList majorPSL.phyCoordList], [majorPSL.eleIndexList majorPSL.paraCoordList]);
-				potentialSolidSppsMajor = find(potentialDisListMajor<mergingThreshold_);
+					state_.seedPointsRef_(sppsEmptyMajorValence,:), [majorPSL.eleIndexList majorPSL.phyCoordList], [majorPSL.eleIndexList majorPSL.paraCoordList]);
+				potentialSolidSppsMajor = find(potentialDisListMajor<state_.mergingThreshold_);
 				if ~isempty(potentialSolidSppsMajor)
 					spps2BeMerged = sppsEmptyMajorValence(potentialSolidSppsMajor);							
-					seedPointsRef_(spps2BeMerged,:) = potentialPosListMajor(potentialSolidSppsMajor,:);
-					seedPoints_(spps2BeMerged,:) = potentialPosListMajorPara(potentialSolidSppsMajor,:);
-					seedPointsValence_(spps2BeMerged,1) = 1;											
+					state_.seedPointsRef_(spps2BeMerged,:) = potentialPosListMajor(potentialSolidSppsMajor,:);
+					state_.seedPoints_(spps2BeMerged,:) = potentialPosListMajorPara(potentialSolidSppsMajor,:);
+					state_.seedPointsValence_(spps2BeMerged,1) = 1;											
 					modifiedMinorValences = HighCurvatureModification(spps2BeMerged, 'MINOR');
-					seedPointsValence_(modifiedMinorValences,2) = 1;							
+					state_.seedPointsValence_(modifiedMinorValences,2) = 1;							
 				end				
 			end
 		end
 		
 		if 0==valences(2)
-			seedPointsValence_(spp,2) = 1;
+			state_.seedPointsValence_(spp,2) = 1;
 			minorPSL = CreatePrincipalStressLine(iSeed, 'MINOR');
 			if 0==minorPSL.numIntergPts
-				looper = sum(seedPointsValence_(:)); 
+				looper = sum(state_.seedPointsValence_(:)); 
 				disp([' Iteration.: ' sprintf('%4i',its) ' Progress.: ' sprintf('%6i',looper) ...
 					' Total.: ' sprintf('%6i',2*numSeedPoints)]); continue; 			
 			end
-			minorPSLpool_(end+1,1) = minorPSL;
-			minorCoordList_(end+1:end+minorPSL.numIntergPts,:) = minorPSL.phyCoordList;
-			sppsEmptyMinorValence = find(0==seedPointsValence_(:,2));
+			state_.minorPSLpool_(end+1,1) = minorPSL;
+			state_.minorCoordList_(end+1:end+minorPSL.numIntergPts,:) = minorPSL.phyCoordList;
+			sppsEmptyMinorValence = find(0==state_.seedPointsValence_(:,2));
 			if ~isempty(sppsEmptyMinorValence)
 				[potentialDisListMinor, potentialPosListMinor, potentialPosListMinorPara] = GetDisListOfPointList2Curve(...	
-					seedPointsRef_(sppsEmptyMinorValence,:), [minorPSL.eleIndexList minorPSL.phyCoordList], [minorPSL.eleIndexList minorPSL.paraCoordList]);
-				potentialSolidSppsMinor = find(potentialDisListMinor<mergingThreshold_);
+					state_.seedPointsRef_(sppsEmptyMinorValence,:), [minorPSL.eleIndexList minorPSL.phyCoordList], [minorPSL.eleIndexList minorPSL.paraCoordList]);
+				potentialSolidSppsMinor = find(potentialDisListMinor<state_.mergingThreshold_);
 				if ~isempty(potentialSolidSppsMinor)
 					spps2BeMerged = sppsEmptyMinorValence(potentialSolidSppsMinor);
-					seedPointsRef_(spps2BeMerged,:) = potentialPosListMinor(potentialSolidSppsMinor,:);
-					seedPoints_(spps2BeMerged,:) = potentialPosListMinorPara(potentialSolidSppsMinor,:);
-					seedPointsValence_(spps2BeMerged,2) = 1;
+					state_.seedPointsRef_(spps2BeMerged,:) = potentialPosListMinor(potentialSolidSppsMinor,:);
+					state_.seedPoints_(spps2BeMerged,:) = potentialPosListMinorPara(potentialSolidSppsMinor,:);
+					state_.seedPointsValence_(spps2BeMerged,2) = 1;
 					modifiedMajorValences = HighCurvatureModification(spps2BeMerged, 'MAJOR');
-					seedPointsValence_(modifiedMajorValences,1) = 1;	
+					state_.seedPointsValence_(modifiedMajorValences,1) = 1;	
 				end
 			end
 		end
-		looper = sum(seedPointsValence_(:));
+		looper = sum(state_.seedPointsValence_(:));
 		disp([' Iteration.: ' sprintf('%4i',its) ' Progress.: ' sprintf('%6i',looper) ...
 			' Total.: ' sprintf('%6i',2*numSeedPoints)]);	
 		% ShowSeedingProcess(0.75);	
 	end
-	majorPSLpool_ = CompactStreamlines(majorPSLpool_, 5);
-	minorPSLpool_ = CompactStreamlines(minorPSLpool_, 5);		
+	state_.majorPSLpool_ = CompactStreamlines(state_.majorPSLpool_, 5);
+	state_.minorPSLpool_ = CompactStreamlines(state_.minorPSLpool_, 5);		
 end
 
 
@@ -636,34 +599,34 @@ function ShowPSLs(stressCompBG, stressCompPSLs, lw, miniIntegralPts)
 	%% stressCompBG: %% 'None', 'Sigma_1', 'Sigma_2', 'Sigma_xx', 'Sigma_yy', 'Sigma_xy', 'Sigma_vM' ('Sigma_3', 'Sigma_zz', 'Sigma_xz', 'Sigma_yz', GLOBAL Stress Input) 
 	%% stressCompPSLs: %% 'None', 'Sigma', 'Sigma_xx', 'Sigma_yy', 'Sigma_xy', 'Sigma_vM'
 	%% ShowPSLs(stressCompBG, stressCompPSLs, lw, miniIntegralPts);
-	global frameType_ numNodes_ silhouetteStruct_ boundingBox_ localStressField_ globalStressField_;
-	global degePts_ majorPSLpool_ minorPSLpool_;
+	global state_;
+	global state_;
 
 	%% Prepare PSLs for Vis
 	tarIndice = [];
-	for ii=1:numel(majorPSLpool_)
-		if majorPSLpool_(ii).numIntergPts > miniIntegralPts, tarIndice(end+1,1) = ii; end
+	for ii=1:numel(state_.majorPSLpool_)
+		if state_.majorPSLpool_(ii).numIntergPts > miniIntegralPts, tarIndice(end+1,1) = ii; end
 	end
-	tarMajorPSLs = majorPSLpool_(tarIndice);	
+	tarMajorPSLs = state_.majorPSLpool_(tarIndice);	
 	numTarMajorPSLs = numel(tarMajorPSLs);
 	
 	tarIndice = [];
-	for ii=1:numel(minorPSLpool_)
-		if minorPSLpool_(ii).numIntergPts > miniIntegralPts, tarIndice(end+1,1) = ii; end
+	for ii=1:numel(state_.minorPSLpool_)
+		if state_.minorPSLpool_(ii).numIntergPts > miniIntegralPts, tarIndice(end+1,1) = ii; end
 	end
-	tarMinorPSLs = minorPSLpool_(tarIndice);	
+	tarMinorPSLs = state_.minorPSLpool_(tarIndice);	
 	numTarMinorPSLs = numel(tarMinorPSLs);
-	numDege = numel(degePts_);
+	numDege = numel(state_.degePts_);
 	degePtPos = zeros(numDege,3);
 	if numDege>0
 		for ii=1:numDege
-			degePtPos(ii,:) = degePts_(ii).phyCoord;
+			degePtPos(ii,:) = state_.degePts_(ii).phyCoord;
 			if 1==ii
-				majorPSLs_TS = degePts_(ii).majorSkeletons;
-				minorPSLs_TS = degePts_(ii).minorSkeletons;
+				majorPSLs_TS = state_.degePts_(ii).majorSkeletons;
+				minorPSLs_TS = state_.degePts_(ii).minorSkeletons;
 			else
-				majorPSLs_TS(end+1:end+numel(degePts_(ii).majorSkeletons),1) = degePts_(ii).majorSkeletons;
-				minorPSLs_TS(end+1:end+numel(degePts_(ii).minorSkeletons),1) = degePts_(ii).minorSkeletons;
+				majorPSLs_TS(end+1:end+numel(state_.degePts_(ii).majorSkeletons),1) = state_.degePts_(ii).majorSkeletons;
+				minorPSLs_TS(end+1:end+numel(state_.degePts_(ii).minorSkeletons),1) = state_.degePts_(ii).minorSkeletons;
 			end
 		end
 		tarIndiceTS = [];
@@ -688,78 +651,78 @@ function ShowPSLs(stressCompBG, stressCompPSLs, lw, miniIntegralPts)
 	%% Setup Color Scheme
 	switch stressCompBG
 		case 'Sigma_1' %%Major Principal Stress
-			switch frameType_
+			switch state_.frameType_
 				case 'LOCAL'
-					tmp = ComputePrincipalStressLocalFrame(localStressField_);
+					tmp = ComputePrincipalStressLocalFrame(state_.localStressField_);
 					cVal = tmp(:,4);					
 				case 'GLOBAL'
-					tmp = ComputePrincipalStressLocalFrame(globalStressField_);
+					tmp = ComputePrincipalStressLocalFrame(state_.globalStressField_);
 					cVal = tmp(:,9);						
 			end		
 		case 'Sigma_2' %%Minor (Medium for global) Principal Stress
-			switch frameType_
+			switch state_.frameType_
 				case 'LOCAL'
-					tmp = ComputePrincipalStressLocalFrame(localStressField_);
+					tmp = ComputePrincipalStressLocalFrame(state_.localStressField_);
 					cVal = tmp(:,1);				
 				case 'GLOBAL'
-					tmp = ComputePrincipalStressLocalFrame(globalStressField_);
+					tmp = ComputePrincipalStressLocalFrame(state_.globalStressField_);
 					cVal = tmp(:,5);
 			end		
 		case 'Sigma_3' %%Minor Principal Stress
-			if strcmp(frameType_, 'GLOBAL')
-				tmp = ComputePrincipalStressLocalFrame(globalStressField_);
+			if strcmp(state_.frameType_, 'GLOBAL')
+				tmp = ComputePrincipalStressLocalFrame(state_.globalStressField_);
 				cVal = tmp(:,1);
 			else
 				warning('Un-supported of the local stres field input!'); return;
 			end
 		case 'Sigma_vM' %%von Mises Stress
-			switch frameType_
+			switch state_.frameType_
 				case 'LOCAL'
-					cVal = ComputeVonMisesStressLocalFrame(localStressField_);
+					cVal = ComputeVonMisesStressLocalFrame(state_.localStressField_);
 				case 'GLOBAL'
-					cVal = ComputeVonMisesStressLocalFrame(globalStressField_);
+					cVal = ComputeVonMisesStressLocalFrame(state_.globalStressField_);
 			end		
 		case 'Sigma_xx'
-			switch frameType_
+			switch state_.frameType_
 				case 'LOCAL'
-					cVal = localStressField_(:,1);
+					cVal = state_.localStressField_(:,1);
 				case 'GLOBAL'
-					cVal = globalStressField_(:,1);
+					cVal = state_.globalStressField_(:,1);
 			end		
 		case 'Sigma_yy'
-			switch frameType_
+			switch state_.frameType_
 				case 'LOCAL'
-					cVal = localStressField_(:,2);
+					cVal = state_.localStressField_(:,2);
 				case 'GLOBAL'
-					cVal = globalStressField_(:,2);
+					cVal = state_.globalStressField_(:,2);
 			end		
 		case {'Sigma_xy', 'Sigma_yx'}
-			switch frameType_
+			switch state_.frameType_
 				case 'LOCAL'
-					cVal = localStressField_(:,3);
+					cVal = state_.localStressField_(:,3);
 				case 'GLOBAL'
-					cVal = globalStressField_(:,6);
+					cVal = state_.globalStressField_(:,6);
 			end
 		case 'Sigma_zz'
-			if strcmp(frameType_, 'GLOBAL')
-				cVal = globalStressField_(:,3);
+			if strcmp(state_.frameType_, 'GLOBAL')
+				cVal = state_.globalStressField_(:,3);
 			else
 				warning('Un-supported of the local stres field input!'); return;
 			end			
 		case {'Sigma_xz', 'Sigma_zx'}
-			if strcmp(frameType_, 'GLOBAL')
-				cVal = globalStressField_(:,5);
+			if strcmp(state_.frameType_, 'GLOBAL')
+				cVal = state_.globalStressField_(:,5);
 			else
 				warning('Un-supported of the local stres field input!'); return;
 			end	
 		case {'Sigma_yz', 'Sigma_zy'}
-			if strcmp(frameType_, 'GLOBAL')
-				cVal = globalStressField_(:,4);
+			if strcmp(state_.frameType_, 'GLOBAL')
+				cVal = state_.globalStressField_(:,4);
 			else
 				warning('Un-supported of the local stres field input!'); return;
 			end			
 		case 'None'
-			cVal = ones(numNodes_,1);			
+			cVal = ones(state_.numNodes_,1);			
 		otherwise
 			warning('Wrong Input!');
 	end
@@ -863,9 +826,9 @@ function ShowPSLs(stressCompBG, stressCompPSLs, lw, miniIntegralPts)
 	
 	%%Draw
 	figure; 
-	handleSilhouette = patch(silhouetteStruct_, 'FaceVertexCData', cVal); hold('on');
+	handleSilhouette = patch(state_.silhouetteStruct_, 'FaceVertexCData', cVal); hold('on');
 
-	lineWidthTube = lw*min(boundingBox_(2,:)-boundingBox_(1,:))/100;
+	lineWidthTube = lw*min(state_.boundingBox_(2,:)-state_.boundingBox_(1,:))/100;
 	if 0==lineWidthTube %%2D
 		majorPSLsGraph.vertices = [];
 		majorPSLsGraph.faces = [];
@@ -1087,11 +1050,11 @@ function oPSLs = CompactStreamlines(iPSLs, truncatedThreshold)
 end
 
 function iniSeedPoints = SetupSeeds(seedSparsityCtrl)
-	global numEles_ voidEleMap_;
-	global meshTypeMap_;
-	iniSeedPoints = zeros(numEles_, 3);
-	for ii=1:numEles_
-		iEleType = meshTypeMap_(ii);
+	global state_;
+	global state_;
+	iniSeedPoints = zeros(state_.numEles_, 3);
+	for ii=1:state_.numEles_
+		iEleType = state_.meshTypeMap_(ii);
 		switch iEleType
 			case {'T3', 'T6'}
 				iniSeedPoints(ii,:) = [ii 1/3 1/3];
@@ -1100,67 +1063,67 @@ function iniSeedPoints = SetupSeeds(seedSparsityCtrl)
 		end
 	end
 	iniSeedPoints = iniSeedPoints(1:seedSparsityCtrl:end,:);
-	iniSeedPoints(find(voidEleMap_),:) = [];
+	iniSeedPoints(find(state_.voidEleMap_),:) = [];
 end
 
 function EmbedTopologicalSkeleton()
-	global seedPoints_;
-	global seedPointsValence_;
-	global seedPointsRef_;
-	global majorPSLpool_ minorPSLpool_
-	global majorCoordList_ minorCoordList_
-	global mergingThreshold_;
-	global degePts_;
+	global state_;
+	global state_;
+	global state_;
+	global state_;
+	global state_;
+	global state_;
+	global state_;
 	
 	%%Move Topological Skeleton to Major and Minor PSL Pools
-	if ~isempty(degePts_)
-		for ii=1:numel(degePts_)
-			for jj=1:numel(degePts_(ii).majorSkeletons)
-				majorPSLpool_(end+1,1) = degePts_(ii).majorSkeletons(jj);
-				majorCoordList_(end+1:end+degePts_(ii).majorSkeletons(jj).numIntergPts,:) = degePts_(ii).majorSkeletons(jj).phyCoordList;
+	if ~isempty(state_.degePts_)
+		for ii=1:numel(state_.degePts_)
+			for jj=1:numel(state_.degePts_(ii).majorSkeletons)
+				state_.majorPSLpool_(end+1,1) = state_.degePts_(ii).majorSkeletons(jj);
+				state_.majorCoordList_(end+1:end+state_.degePts_(ii).majorSkeletons(jj).numIntergPts,:) = state_.degePts_(ii).majorSkeletons(jj).phyCoordList;
 			end
-			for jj=1:numel(degePts_(ii).minorSkeletons)
-				minorPSLpool_(end+1,1) = degePts_(ii).minorSkeletons(jj);
-				minorCoordList_(end+1:end+degePts_(ii).minorSkeletons(jj).numIntergPts,:) = degePts_(ii).minorSkeletons(jj).phyCoordList;
+			for jj=1:numel(state_.degePts_(ii).minorSkeletons)
+				state_.minorPSLpool_(end+1,1) = state_.degePts_(ii).minorSkeletons(jj);
+				state_.minorCoordList_(end+1:end+state_.degePts_(ii).minorSkeletons(jj).numIntergPts,:) = state_.degePts_(ii).minorSkeletons(jj).phyCoordList;
 			end			
 		end
 	end
-	numMajorPSLs = numel(majorPSLpool_);
+	numMajorPSLs = numel(state_.majorPSLpool_);
 	for ii=1:numMajorPSLs
-		majorPSL = majorPSLpool_(ii);
+		majorPSL = state_.majorPSLpool_(ii);
 		if majorPSL.numIntergPts>0					
-			sppsEmptyMajorValence = find(0==seedPointsValence_(:,1));
+			sppsEmptyMajorValence = find(0==state_.seedPointsValence_(:,1));
             if ~isempty(sppsEmptyMajorValence)
 				[potentialDisListMajor, potentialPosListMajor, potentialPosListMajorPara] = GetDisListOfPointList2Curve(...	
-					seedPointsRef_(sppsEmptyMajorValence,:), [majorPSL.eleIndexList majorPSL.phyCoordList], [majorPSL.eleIndexList majorPSL.paraCoordList]);
-				potentialSolidSppsMajor = find(potentialDisListMajor<=mergingThreshold_);
+					state_.seedPointsRef_(sppsEmptyMajorValence,:), [majorPSL.eleIndexList majorPSL.phyCoordList], [majorPSL.eleIndexList majorPSL.paraCoordList]);
+				potentialSolidSppsMajor = find(potentialDisListMajor<=state_.mergingThreshold_);
 				if ~isempty(potentialSolidSppsMajor)
 					spps2BeMerged = sppsEmptyMajorValence(potentialSolidSppsMajor);							
-					seedPointsRef_(spps2BeMerged,:) = potentialPosListMajor(potentialSolidSppsMajor,:);
-					seedPoints_(spps2BeMerged,:) = potentialPosListMajorPara(potentialSolidSppsMajor,:);
-					seedPointsValence_(spps2BeMerged,1) = 1;											
+					state_.seedPointsRef_(spps2BeMerged,:) = potentialPosListMajor(potentialSolidSppsMajor,:);
+					state_.seedPoints_(spps2BeMerged,:) = potentialPosListMajorPara(potentialSolidSppsMajor,:);
+					state_.seedPointsValence_(spps2BeMerged,1) = 1;											
 					modifiedMinorValences = HighCurvatureModification(spps2BeMerged, 'MINOR');
-					seedPointsValence_(modifiedMinorValences,2) = 1;							
+					state_.seedPointsValence_(modifiedMinorValences,2) = 1;							
 				end
 			end
 		end
 	end
-	numMinorPSLs = numel(minorPSLpool_);
+	numMinorPSLs = numel(state_.minorPSLpool_);
 	for ii=1:numMinorPSLs
-		minorPSL = minorPSLpool_(ii);
+		minorPSL = state_.minorPSLpool_(ii);
 		if minorPSL.numIntergPts>0	
-			sppsEmptyMinorValence = find(0==seedPointsValence_(:,2));
+			sppsEmptyMinorValence = find(0==state_.seedPointsValence_(:,2));
             if ~isempty(sppsEmptyMinorValence)
 				[potentialDisListMinor, potentialPosListMinor, potentialPosListMinorPara] = GetDisListOfPointList2Curve(...	
-					seedPointsRef_(sppsEmptyMinorValence,:), [minorPSL.eleIndexList minorPSL.phyCoordList], [minorPSL.eleIndexList minorPSL.paraCoordList]);
-				potentialSolidSppsMinor = find(potentialDisListMinor<=mergingThreshold_);
+					state_.seedPointsRef_(sppsEmptyMinorValence,:), [minorPSL.eleIndexList minorPSL.phyCoordList], [minorPSL.eleIndexList minorPSL.paraCoordList]);
+				potentialSolidSppsMinor = find(potentialDisListMinor<=state_.mergingThreshold_);
 				if ~isempty(potentialSolidSppsMinor)
 					spps2BeMerged = sppsEmptyMinorValence(potentialSolidSppsMinor);
-					seedPointsRef_(spps2BeMerged,:) = potentialPosListMinor(potentialSolidSppsMinor,:);
-					seedPoints_(spps2BeMerged,:) = potentialPosListMinorPara(potentialSolidSppsMinor,:);
-					seedPointsValence_(spps2BeMerged,2) = 1;
+					state_.seedPointsRef_(spps2BeMerged,:) = potentialPosListMinor(potentialSolidSppsMinor,:);
+					state_.seedPoints_(spps2BeMerged,:) = potentialPosListMinorPara(potentialSolidSppsMinor,:);
+					state_.seedPointsValence_(spps2BeMerged,2) = 1;
 					modifiedMajorValences = HighCurvatureModification(spps2BeMerged, 'MAJOR');
-					seedPointsValence_(modifiedMajorValences,1) = 1;						
+					state_.seedPointsValence_(modifiedMajorValences,1) = 1;						
 				end
 			end
 		end
@@ -1176,27 +1139,27 @@ function [potentialDisList, potentialPosList, potentialPosListPara] = GetDisList
 end
 
 function modifiedValences = HighCurvatureModification(spps2BeMerged, psDir)
-	global majorCoordList_; 
-	global minorCoordList_;		
-	global seedPointsRef_;
-	global seedPointsValence_;
-	global mergingThreshold_;
+	global state_;
+	global state_;
+	global state_;
+	global state_;
+	global state_;
 
 	tarCurve = [];
 	switch psDir
 		case 'MAJOR'
-			if isempty(majorCoordList_), modifiedValences = []; return; end
-			tarCurve = majorCoordList_;
-            spps2BeMerged = spps2BeMerged(0==seedPointsValence_(spps2BeMerged,1));
+			if isempty(state_.majorCoordList_), modifiedValences = []; return; end
+			tarCurve = state_.majorCoordList_;
+            spps2BeMerged = spps2BeMerged(0==state_.seedPointsValence_(spps2BeMerged,1));
 		case 'MINOR'
-			if isempty(minorCoordList_), modifiedValences = []; return; end
-			tarCurve = minorCoordList_;
-            spps2BeMerged = spps2BeMerged(0==seedPointsValence_(spps2BeMerged,2));
+			if isempty(state_.minorCoordList_), modifiedValences = []; return; end
+			tarCurve = state_.minorCoordList_;
+            spps2BeMerged = spps2BeMerged(0==state_.seedPointsValence_(spps2BeMerged,2));
 	end
-	srcPoints = seedPointsRef_(spps2BeMerged,end-2:end);
+	srcPoints = state_.seedPointsRef_(spps2BeMerged,end-2:end);
 	disT = DistanceMap2PtCloud(srcPoints, tarCurve);	
 	minVal = min(disT, [], 1);
-	modifiedValences = spps2BeMerged(find(minVal<mergingThreshold_));
+	modifiedValences = spps2BeMerged(find(minVal<state_.mergingThreshold_));
 end
 
 function parasOut = AvoidExactLocationAtVertexOrEdge4Robustness(parasIn, eleType, safetyScaling)
@@ -1263,7 +1226,7 @@ function inside = CheckWhetherGivenNaturalCoordinatesWithinDomain(paras, eleType
 end
 
 function [R, origin, t1, t2] = ComputeLocalFrameAtGivenPosition(paras, iEleNodes, elementType)
-	global refVec_ refVecFallback_ tolRefVecFallback_;
+	global state_;
 	N = ShapeFunction(paras, elementType);
 	[dNdxi, dNdeta] = DeShapeFunction(paras, elementType);
 	%%Tangent Planes at "paras"
@@ -1272,12 +1235,12 @@ function [R, origin, t1, t2] = ComputeLocalFrameAtGivenPosition(paras, iEleNodes
 	origin = N*iEleNodes;
 	nVec = cross(t1, t2);
 	e3 = nVec ./ vecnorm(nVec,2,2);
-	rVec = refVec_;
+	rVec = state_.refVec_;
 	tVec = rVec - (dot(rVec, e3))*e3;
-	if norm(tVec) < tolRefVecFallback_
-		rVec = refVecFallback_;
+	if norm(tVec) < state_.tolRefVecFallback_
+		rVec = state_.refVecFallback_;
 		tVec = rVec - (dot(rVec, e3))*e3;
-		if norm(tVec) < tolRefVecFallback_
+		if norm(tVec) < state_.tolRefVecFallback_
 			error('Reference directions are parallel to normal; provide a custom ref.');
 		end				
 	end
@@ -1459,29 +1422,29 @@ end
 
 function [phyCoordList, eleIndexList, paraCoordList, localFrameList, localStressTensorList, localPrincipalStressList, ...
 	localVonMisesStressList] = Tracing(e0, paraCoord0, localFrame0, t1, t2, v0, psDir)
-	global tracingSche_ scalingStepSize4PSL_ limitSteps_;
-	global meshTypeMap_ voidEleMap_ eleStruct_;
-	global eleCharacterSizeList_ shellCurvatureScaling_;
+	global state_;
+	global state_;
+	global state_;
 
-	phyCoordList = zeros(limitSteps_,3);
-	tangentList = zeros(limitSteps_,3);
-	eleIndexList = zeros(limitSteps_,1);
-	paraCoordList = zeros(limitSteps_,2);
-	localFrameList = zeros(3,3,limitSteps_);
-	localStressTensorList = zeros(limitSteps_,3);
-	localPrincipalStressList = zeros(limitSteps_,6);
-	localVonMisesStressList = zeros(limitSteps_,1);
+	phyCoordList = zeros(state_.limitSteps_,3);
+	tangentList = zeros(state_.limitSteps_,3);
+	eleIndexList = zeros(state_.limitSteps_,1);
+	paraCoordList = zeros(state_.limitSteps_,2);
+	localFrameList = zeros(3,3,state_.limitSteps_);
+	localStressTensorList = zeros(state_.limitSteps_,3);
+	localPrincipalStressList = zeros(state_.limitSteps_,6);
+	localVonMisesStressList = zeros(state_.limitSteps_,1);
 	
 	[e0, paraCoord0, localFrame0, t1, t2, v0] = SeedSecurityCheck4Robustness(e0, paraCoord0, localFrame0, t1, t2, v0);
-	if voidEleMap_(e0), e0 = 0; end
+	if state_.voidEleMap_(e0), e0 = 0; end
 	index = 0;
 	reachingBoundary = false;
-    eStart = eleStruct_(e0).edge2nextEle;
-	switch tracingSche_
+    eStart = state_.eleStruct_(e0).edge2nextEle;
+	switch state_.tracingSche_
 		case 'Euler'
-			while e0 && index<=limitSteps_ && ~reachingBoundary
-				e0Type = meshTypeMap_(e0);
-				tracingStepSize = eleCharacterSizeList_(e0)/scalingStepSize4PSL_/shellCurvatureScaling_(e0);
+			while e0 && index<=state_.limitSteps_ && ~reachingBoundary
+				e0Type = state_.meshTypeMap_(e0);
+				tracingStepSize = state_.eleCharacterSizeList_(e0)/state_.scalingStepSize4PSL_/state_.shellCurvatureScaling_(e0);
 				localCoordIncrement = tracingStepSize*v0;
 				paraCoordIncrement = ComputeIncrementOfNaturalCoordFromIncrementOfLocalCoord(localCoordIncrement, localFrame0, t1(:), t2(:));
 				paraCoord1 = paraCoord0 + paraCoordIncrement;
@@ -1519,9 +1482,9 @@ function [phyCoordList, eleIndexList, paraCoordList, localFrameList, localStress
 				localFrame0 = iLocalFrame;
 			end		
 		case 'RK2'
-			while e0 && index<=limitSteps_ && ~reachingBoundary
-				e0Type = meshTypeMap_(e0);
-				tracingStepSize = eleCharacterSizeList_(e0)/scalingStepSize4PSL_/shellCurvatureScaling_(e0);
+			while e0 && index<=state_.limitSteps_ && ~reachingBoundary
+				e0Type = state_.meshTypeMap_(e0);
+				tracingStepSize = state_.eleCharacterSizeList_(e0)/state_.scalingStepSize4PSL_/state_.shellCurvatureScaling_(e0);
 				localCoordIncrement = tracingStepSize*v0;
 				paraCoordIncrement = ComputeIncrementOfNaturalCoordFromIncrementOfLocalCoord(localCoordIncrement, localFrame0, t1(:), t2(:)); %%k1
 				paraCoord1 = paraCoord0 + paraCoordIncrement;
@@ -1587,7 +1550,7 @@ function [phyCoordList, eleIndexList, paraCoordList, localFrameList, localStress
 end
 
 function [v1, terminationCond] = BidirectionalFeatureProcessing(v0, v1Potential, localFrame0, localFrame1)
-	global permittedMaxAdjacentTangentAngleDeviation_;
+	global state_;
 	terminationCond = 0;
 	
 	v0Global = GlobalFrame2Local_Vecs(v0, localFrame0, 0);
@@ -1597,10 +1560,10 @@ function [v1, terminationCond] = BidirectionalFeatureProcessing(v0, v1Potential,
 	angle2 = acos(-v0Global*v1Potentialglobal');
 	if angle1 < angle2
 		v1 = v1Potential;
-		if angle1 > permittedMaxAdjacentTangentAngleDeviation_/180*pi, terminationCond = 1; end
+		if angle1 > state_.permittedMaxAdjacentTangentAngleDeviation_/180*pi, terminationCond = 1; end
 	else
 		v1 = -v1Potential;
-		if angle2 > permittedMaxAdjacentTangentAngleDeviation_/180*pi, terminationCond = 1; end
+		if angle2 > state_.permittedMaxAdjacentTangentAngleDeviation_/180*pi, terminationCond = 1; end
 	end
 end
 
@@ -1645,10 +1608,10 @@ function paraCoordIncrement = ComputeIncrementOfNaturalCoordFromIncrementOfLocal
 end
 
 function [alpha0, tVec] = CheckSignedDihedralAngle(e1, e1_edgeID, localFrame1, localFrame2)
-	global eleStruct_;
-	global nodeCoords_;
+	global state_;
+	global state_;
 	
-	tarEdgeVec = nodeCoords_(eleStruct_(e1).vtxEdgesGlobal(e1_edgeID,:),:);
+	tarEdgeVec = state_.nodeCoords_(state_.eleStruct_(e1).vtxEdgesGlobal(e1_edgeID,:),:);
 	tVec = tarEdgeVec(2,:) - tarEdgeVec(1,:); tVec = tVec / norm(tVec);
 	n1 = localFrame1(:,3);
 	n2 = localFrame2(:,3);
@@ -1657,7 +1620,7 @@ function [alpha0, tVec] = CheckSignedDihedralAngle(e1, e1_edgeID, localFrame1, l
 end
 
 function [e0, e0Type, paraCoord1, e0_edgeIDlocal, optAtBoundary, paraCoord1Fallback] = EdgeSituationProcessing(e0, paraCoord0, paraCoord1, e0Type)
-	global eleStruct_ meshTypeMap_ voidEleMap_;
+	global state_;
 	tolBoundaryCloseness = 1.0e-2;
 	optAtBoundary = false;
 	%%Get Intersection
@@ -1667,7 +1630,7 @@ function [e0, e0Type, paraCoord1, e0_edgeIDlocal, optAtBoundary, paraCoord1Fallb
 		paraCoord0
 		paraCoord1
 	end
-	e1 = eleStruct_(e0).edge2nextEle(e0_edgeIDlocal);
+	e1 = state_.eleStruct_(e0).edge2nextEle(e0_edgeIDlocal);
 	if 0==e1%%paraCoord1 is not in the domain 
 		%%Endpoint treatment when reaching boundary 
 		if norm(paraCoord0-paraCoord1Fallback) > tolBoundaryCloseness
@@ -1677,42 +1640,42 @@ function [e0, e0Type, paraCoord1, e0_edgeIDlocal, optAtBoundary, paraCoord1Fallb
 			optAtBoundary = true;
 			%break;
 		end
-	elseif voidEleMap_(e1) %%enter into void element
+	elseif state_.voidEleMap_(e1) %%enter into void element
 		optAtBoundary = true;
 	else %%paraCoord1 is not in e0 but still in the domain, specificly in e1
 		%%Shift computing stencils (natural coordinates) to next element (e1)
 		%%Convert Natural Coordinates (NC) at Shared Edge of 2 Adjacent Elements
 		e0_sharedEdge_NatCoord = paraCoord1Fallback;
-		e1_edgeIDlocal = eleStruct_(e0).edgeIDsOfNextEle(e0_edgeIDlocal);
+		e1_edgeIDlocal = state_.eleStruct_(e0).edgeIDsOfNextEle(e0_edgeIDlocal);
 		e1_sharedEdge_NatCoord = ConvertNaturalCoordsAtSharedEdge(e0, e0_sharedEdge_NatCoord, e0_edgeIDlocal, e0Type, ...
-			eleStruct_(e0).vtxEdgesGlobal(e0_edgeIDlocal,:), e1, e1_edgeIDlocal, meshTypeMap_(e1), ...
-				eleStruct_(e1).vtxEdgesGlobal(e1_edgeIDlocal,:));
+			state_.eleStruct_(e0).vtxEdgesGlobal(e0_edgeIDlocal,:), e1, e1_edgeIDlocal, state_.meshTypeMap_(e1), ...
+				state_.eleStruct_(e1).vtxEdgesGlobal(e1_edgeIDlocal,:));
 		%%***Maybe Problematic for Sharp Edge***
 		e0 = e1;
-		e0Type = meshTypeMap_(e0);
+		e0Type = state_.meshTypeMap_(e0);
 		paraCoord1 = e1_sharedEdge_NatCoord;			
 	end	
 end	
 
 function [iPhyCoord, iLocalFrame, t1, t2, iStressTensor, iVonMisesStress, iPrincipalStress] = RetrievePhyInfoAtUpdatedPt(e0, paraCoord1, e0Type)
-	global approxiInterp_;
-	global nodeCoords_ eNodMat_;
-	global localStressFieldPerEle_ globalStressFieldPerEle_;
+	global state_;
+	global state_;
+	global state_;
 
 	switch e0Type
-		case 'T3', iEleNodes = eNodMat_(e0,1:3);
-		case 'Q4', iEleNodes = eNodMat_(e0,1:4);
-		case 'T6', iEleNodes = eNodMat_(e0,1:6);
-		case 'Q8', iEleNodes = eNodMat_(e0,1:8);				
+		case 'T3', iEleNodes = state_.eNodMat_(e0,1:3);
+		case 'Q4', iEleNodes = state_.eNodMat_(e0,1:4);
+		case 'T6', iEleNodes = state_.eNodMat_(e0,1:6);
+		case 'Q8', iEleNodes = state_.eNodMat_(e0,1:8);				
 	end
 	SF = ShapeFunction(paraCoord1, e0Type);
-	iEleNodeCoords = nodeCoords_(iEleNodes,:);
+	iEleNodeCoords = state_.nodeCoords_(iEleNodes,:);
 	iPhyCoord = SF * iEleNodeCoords;
 	[iLocalFrame, ~, t1, t2] = ComputeLocalFrameAtGivenPosition(paraCoord1, iEleNodeCoords, e0Type);
-	if approxiInterp_
-		iStressTensor = SF * localStressFieldPerEle_{e0};
+	if state_.approxiInterp_
+		iStressTensor = SF * state_.localStressFieldPerEle_{e0};
 	else
-		iStressTensorGlobal = SF * globalStressFieldPerEle_{e0};
+		iStressTensorGlobal = SF * state_.globalStressFieldPerEle_{e0};
 		iStressTensor = GlobalFrame2Local_StressTensor(iStressTensorGlobal, iLocalFrame, 1);
 	end
 	iVonMisesStress = ComputeVonMisesStressLocalFrame(iStressTensor);
@@ -1989,36 +1952,36 @@ function [edgeID, paraCoord1Fallback, successfulIntersection] = DetectIntersecte
 end
 
 function disT = DistanceMap2PtCloud(srcPoints, tarCurve)
-	global triangularizedMesh_ triangularizedMeshGraph_
-	global distanceMetric_;
-	switch distanceMetric_
+	global state_;
+	global state_;
+	switch state_.distanceMetric_
 		case 'Euclidean'
 			disT = (tarCurve(:,1) - srcPoints(:,1)').^2;
 			disT = disT + (tarCurve(:,2) - srcPoints(:,2)').^2;
 			disT = disT + (tarCurve(:,3) - srcPoints(:,3)').^2;
 			disT = sqrt(disT);
 		case 'Geodesic'
-			idtarCurve = nearestNeighbor(triangularizedMesh_, tarCurve);
-			idsrcPoints = nearestNeighbor(triangularizedMesh_, srcPoints);	
+			idtarCurve = nearestNeighbor(state_.triangularizedMesh_, tarCurve);
+			idsrcPoints = nearestNeighbor(state_.triangularizedMesh_, srcPoints);	
 			[tarCurve_campact, ~, tarCurve_recoverMap] = unique(idtarCurve);
 			[srcPoints_campact, ~, srcPoints_recoverMap] = unique(idsrcPoints);
-			disT = distances(triangularizedMeshGraph_, tarCurve_campact, srcPoints_campact);
+			disT = distances(state_.triangularizedMeshGraph_, tarCurve_campact, srcPoints_campact);
 			disT = disT(tarCurve_recoverMap,:);
 			disT = disT(:,srcPoints_recoverMap);
 	end
 end
 
 function faceNormals = EvaluateMeshNormals()
-	global numEles_ meshTypeMap_ nodeCoords_ eNodMat_
-	faceNormals = zeros(numEles_,3);
-	for ii=1:numEles_
-		iEleType = meshTypeMap_(ii);
+	global state_;
+	faceNormals = zeros(state_.numEles_,3);
+	for ii=1:state_.numEles_
+		iEleType = state_.meshTypeMap_(ii);
 		switch iEleType
 			case {'T3', 'T6'}
-				iEleCoords = nodeCoords_(eNodMat_(ii,1:3),:);
+				iEleCoords = state_.nodeCoords_(state_.eNodMat_(ii,1:3),:);
 				[R, origin, t1, t2] = ComputeLocalFrameAtGivenPosition([1 1]/3, iEleCoords, 'T3');
 			case {'Q4', 'Q8'}
-				iEleCoords = nodeCoords_(eNodMat_(ii,1:4),:);
+				iEleCoords = state_.nodeCoords_(state_.eNodMat_(ii,1:4),:);
 				[R, origin, t1, t2] = ComputeLocalFrameAtGivenPosition([0 0], iEleCoords, 'Q4');
 		end
 		faceNormals(ii,:) = R(:,3)';
@@ -2158,9 +2121,9 @@ function vecsOut = GlobalFrame2Local_Vecs(vecsIn, R, opt)
 end
 
 function [seed0, phyCoord, localCoord, localFrame, t1, t2, localStressTensor, localPrincipalStress, localVonMisesStress, opt] = PreparingForTracing(startPoint)
-	global nodeCoords_ eNodMat_ meshTypeMap_ voidEleMap_;
-	global refScalingSize_ approxiInterp_;
-	global localStressFieldPerEle_ globalStressFieldPerEle_;
+	global state_;
+	global state_;
+	global state_;
 	
 	ele = startPoint(1);
 	paras = startPoint(2:3); %% Natural Coordinates
@@ -2173,9 +2136,9 @@ function [seed0, phyCoord, localCoord, localFrame, t1, t2, localStressTensor, lo
 	localStressTensor = NaN; 
 	localPrincipalStress = NaN; 
 	localVonMisesStress = NaN;
-	if voidEleMap_(ele), opt = false; return; end
+	if state_.voidEleMap_(ele), opt = false; return; end
 	
-	eleType = meshTypeMap_(ele);
+	eleType = state_.meshTypeMap_(ele);
 	switch eleType
 		case 'T3'
 			eleOrder = 1;
@@ -2193,18 +2156,18 @@ function [seed0, phyCoord, localCoord, localFrame, t1, t2, localStressTensor, lo
 	% paras = AvoidExactLocationAtVertexOrEdge4Robustness(paras, eleType, 1.0e-4);
 	state_withinit = CheckWhetherGivenNaturalCoordinatesWithinDomain(paras, eleType);
 	if state_withinit
-		iEleNodes = eNodMat_(ele,nodeListPerEle);
-		iEleNodeCoords = nodeCoords_(iEleNodes,:);
+		iEleNodes = state_.eNodMat_(ele,nodeListPerEle);
+		iEleNodeCoords = state_.nodeCoords_(iEleNodes,:);
 		SF = ShapeFunction(paras, eleType);
 		phyCoord = SF * iEleNodeCoords;
 
 		[localFrame, origin0, t1, t2] = ComputeLocalFrameAtGivenPosition(paras, iEleNodeCoords, eleType);
 		localCoord = [0 0];
 			
-		if approxiInterp_
-			localStressTensor = SF * localStressFieldPerEle_(ele,:);
+		if state_.approxiInterp_
+			localStressTensor = SF * state_.localStressFieldPerEle_(ele,:);
 		else
-			globalStressTensor = SF * globalStressFieldPerEle_{ele};
+			globalStressTensor = SF * state_.globalStressFieldPerEle_{ele};
 			localStressTensor = GlobalFrame2Local_StressTensor(globalStressTensor, localFrame, 1);
 		end
 		localPrincipalStress = ComputePrincipalStressLocalFrame(localStressTensor);
@@ -2232,10 +2195,10 @@ end
 function [e0out, paraCoord0out, localFrame0out, t1out, t2out, v0out] = SeedSecurityCheck4Robustness(e0in, paraCoord0in, localFrame0in, t1in, t2in, v0in)
 	%% This function is introduced to counteract the situation where the seed point is exactly located at the element 
 	%% edge or vertex meanwhile the initial direction is outward
-	global meshTypeMap_;
-	global eleStruct_;
-	global nodeCoords_;
-	global eNodMat_;
+	global state_;
+	global state_;
+	global state_;
+	global state_;
 	
 	e0out = e0in;
 	paraCoord0out = paraCoord0in;
@@ -2243,7 +2206,7 @@ function [e0out, paraCoord0out, localFrame0out, t1out, t2out, v0out] = SeedSecur
 	t1out = t1in;
 	t2out = t2in;
 	v0out = v0in;
-	iEleType = meshTypeMap_(e0in);
+	iEleType = state_.meshTypeMap_(e0in);
 	tolEff = 1.0e6 * eps(1.0);
 	s = paraCoord0in(1); t = paraCoord0in(2);
 	if strcmp(iEleType, 'T3') || strcmp(iEleType, 'T6')
@@ -2271,7 +2234,7 @@ function [e0out, paraCoord0out, localFrame0out, t1out, t2out, v0out] = SeedSecur
 				if acos(eNormal*v0in') > pi/2 %%v0in is inward
 					return
 				else
-					e1 = eleStruct_(e0in).edge2nextEle(edgeID);
+					e1 = state_.eleStruct_(e0in).edge2nextEle(edgeID);
 					if 0==e1, return; end %%approaching boundary
 					[e0out, paraCoord0out, localFrame0out, t1out, t2out, v0out] = ...
 						TransferToNextElement_StandardSharedEdgeCase(e0in, edgeID, [s t], iEleType, e1, v0in, localFrame0in);						
@@ -2308,7 +2271,7 @@ function [e0out, paraCoord0out, localFrame0out, t1out, t2out, v0out] = SeedSecur
 				if acos(eNormal*v0in') > pi/2 %%v0in is inward
 					return
 				else
-					e1 = eleStruct_(e0in).edge2nextEle(edgeID);
+					e1 = state_.eleStruct_(e0in).edge2nextEle(edgeID);
 					if 0==e1, return; end %%approaching boundary
 					[e0out, paraCoord0out, localFrame0out, t1out, t2out, v0out] = ...
 						TransferToNextElement_StandardSharedEdgeCase(e0in, edgeID, [s t], iEleType, e1, v0in, localFrame0in);			
@@ -2324,27 +2287,27 @@ end
 
 function [e0out, paraCoord0out, localFrame0out, t1out, t2out, v0out] = ...
 			TransferToNextElement_StandardSharedEdgeCase(e0in, edgeID, e0Para, e0Type, e1, v0in, localFrame0in)
-	global nodeCoords_;
-	global eNodMat_;
-	global eleStruct_;
-	global meshTypeMap_;
+	global state_;
+	global state_;
+	global state_;
+	global state_;
 	
-	e1_edgeIDlocal = eleStruct_(e0in).edgeIDsOfNextEle(edgeID);
+	e1_edgeIDlocal = state_.eleStruct_(e0in).edgeIDsOfNextEle(edgeID);
 	e1_sharedEdge_NatCoord = ConvertNaturalCoordsAtSharedEdge(e0in, e0Para, edgeID, e0Type, ...
-		eleStruct_(e0in).vtxEdgesGlobal(edgeID,:), e1, e1_edgeIDlocal, meshTypeMap_(e1), ...
-			eleStruct_(e1).vtxEdgesGlobal(e1_edgeIDlocal,:));
+		state_.eleStruct_(e0in).vtxEdgesGlobal(edgeID,:), e1, e1_edgeIDlocal, state_.meshTypeMap_(e1), ...
+			state_.eleStruct_(e1).vtxEdgesGlobal(e1_edgeIDlocal,:));
 	v0inGlobal = GlobalFrame2Local_Vecs(v0in, localFrame0in, 0);
-	switch meshTypeMap_(e1)
+	switch state_.meshTypeMap_(e1)
 		case 'T3'
-			iEleCoords = nodeCoords_(eNodMat_(e1,1:3),:);
+			iEleCoords = state_.nodeCoords_(state_.eNodMat_(e1,1:3),:);
 		case 'T6'
-			iEleCoords = nodeCoords_(eNodMat_(e1,1:6),:);
+			iEleCoords = state_.nodeCoords_(state_.eNodMat_(e1,1:6),:);
 		case 'Q4'
-			iEleCoords = nodeCoords_(eNodMat_(e1,1:4),:);
+			iEleCoords = state_.nodeCoords_(state_.eNodMat_(e1,1:4),:);
 		case 'Q8'
-			iEleCoords = nodeCoords_(eNodMat_(e1,1:8),:);	
+			iEleCoords = state_.nodeCoords_(state_.eNodMat_(e1,1:8),:);	
 	end
-	[e1R, ~, e1t1, e2t2] = ComputeLocalFrameAtGivenPosition(e1_sharedEdge_NatCoord, iEleCoords, meshTypeMap_(e1));
+	[e1R, ~, e1t1, e2t2] = ComputeLocalFrameAtGivenPosition(e1_sharedEdge_NatCoord, iEleCoords, state_.meshTypeMap_(e1));
 	v0outLocal = GlobalFrame2Local_Vecs(v0inGlobal, e1R, 1);
 	
 	
@@ -2357,20 +2320,20 @@ function [e0out, paraCoord0out, localFrame0out, t1out, t2out, v0out] = ...
 end
 
 function eNormal = DetermineExternalNormalOfGivenEdgeInLocalFrame(e0, edgeID)
-	global eleStruct_;
-	global meshTypeMap_;
-	global nodeCoords_;
-	global eNodMat_;
-	iEleType = meshTypeMap_(e0);
-	vtxCoordsGlobal = eleStruct_(e0).vtxEdgesGlobal(edgeID,:);
+	global state_;
+	global state_;
+	global state_;
+	global state_;
+	iEleType = state_.meshTypeMap_(e0);
+	vtxCoordsGlobal = state_.eleStruct_(e0).vtxEdgesGlobal(edgeID,:);
 	if strcmp(iEleType, 'T3') || strcmp(iEleType, 'T6')
-		iEleCoords = nodeCoords_(eNodMat_(e0,1:3),:);
+		iEleCoords = state_.nodeCoords_(state_.eNodMat_(e0,1:3),:);
 		[R, origin, ~, ~] = ComputeLocalFrameAtGivenPosition([1 1]/3, iEleCoords, 'T3');
 	elseif strcmp(iEleType, 'Q4') || strcmp(iEleType, 'Q8')
-		iEleCoords = nodeCoords_(eNodMat_(e0,1:4),:);
+		iEleCoords = state_.nodeCoords_(state_.eNodMat_(e0,1:4),:);
 		[R, origin, ~, ~] = ComputeLocalFrameAtGivenPosition([0 0], iEleCoords, 'Q4');
 	end
-	vtxCoordsLocal = GlobalFrame2Local_Coords(nodeCoords_(vtxCoordsGlobal,:), R, origin, 1);
+	vtxCoordsLocal = GlobalFrame2Local_Coords(state_.nodeCoords_(vtxCoordsGlobal,:), R, origin, 1);
 	edgeVecLocal = vtxCoordsLocal(2,:) - vtxCoordsLocal(1,:); edgeVecLocal = edgeVecLocal / norm(edgeVecLocal);
 	normVecRaw = [-edgeVecLocal(2) edgeVecLocal(1)];
 	refVec = sum(edgeVecLocal,1)/2; refVec = refVec/norm(refVec);
@@ -2384,11 +2347,11 @@ end
 
 function [e0out, paraCoord0out, localFrame0out, t1out, t2out, v0out] = ...
 	TransferToNextElement_StandardSharedNodeCase(nodeID, e0in, e0Para, localFrame0in, t1in, t2in, v0in)
-	global nodeCoords_;
-	global eNodMat_;
-	global nodStruct_;
-	global eleCentroids_;
-	global meshTypeMap_;
+	global state_;
+	global state_;
+	global state_;
+	global state_;
+	global state_;
 	
 	e0out = e0in;
 	paraCoord0out = e0Para;
@@ -2398,28 +2361,28 @@ function [e0out, paraCoord0out, localFrame0out, t1out, t2out, v0out] = ...
 	v0out = v0in;
 	
 	v0inGlobal = GlobalFrame2Local_Vecs(v0in, localFrame0in, 0);
-	tarNodeGlobal = eNodMat_(e0in, nodeID);
-	tarNodeCoord = nodeCoords_(tarNodeGlobal,:);
-	adjElesSharingThisNode = nodStruct_(tarNodeGlobal).adjacentEles;
+	tarNodeGlobal = state_.eNodMat_(e0in, nodeID);
+	tarNodeCoord = state_.nodeCoords_(tarNodeGlobal,:);
+	adjElesSharingThisNode = state_.nodStruct_(tarNodeGlobal).adjacentEles;
 	numAdjEles = numel(adjElesSharingThisNode);
-	refSize = vecnorm(tarNodeCoord-eleCentroids_,2,2)/4;
+	refSize = vecnorm(tarNodeCoord-state_.eleCentroids_,2,2)/4;
 	
 	inside = false;
 	for ii=1:numAdjEles
 		iEle = adjElesSharingThisNode(ii);
-		iEleType = meshTypeMap_(iEle);
+		iEleType = state_.meshTypeMap_(iEle);
 		iPerturbationPos = tarNodeCoord + v0inGlobal*refSize(ii);
 		switch iEleType
 			case 'T3'
-				iEleNodes = eNodMat_(iEle, 1:3);
+				iEleNodes = state_.eNodMat_(iEle, 1:3);
 			case 'Q4'
-				iEleNodes = eNodMat_(iEle, 1:4);
+				iEleNodes = state_.eNodMat_(iEle, 1:4);
 			case 'T6'
-				iEleNodes = eNodMat_(iEle, 1:6);
+				iEleNodes = state_.eNodMat_(iEle, 1:6);
 			case 'Q8'
-				iEleNodes = eNodMat_(iEle, 1:8);
+				iEleNodes = state_.eNodMat_(iEle, 1:8);
 		end
-		iEleNodeCoordsPhy = nodeCoords_(iEleNodes,:);
+		iEleNodeCoordsPhy = state_.nodeCoords_(iEleNodes,:);
 		[~, inside] = NewtonRhapson_LocatingPosition3D(iEleNodeCoordsPhy, iPerturbationPos, iEleType);
 		if inside
 			e0out = iEle;
@@ -2627,9 +2590,9 @@ function N = ShapeFunction(paras, elementType)
 end
 
 function ShowMeshNormals(faceNormals)
-	global silhouetteStruct_ eleCentroids_
-	hdEles = patch(silhouetteStruct_); hold('on');
-	hdNormals = quiver3(eleCentroids_(:,1), eleCentroids_(:,2), eleCentroids_(:,3), faceNormals(:,1), faceNormals(:,2), faceNormals(:,3));
+	global state_;
+	hdEles = patch(state_.silhouetteStruct_); hold('on');
+	hdNormals = quiver3(state_.eleCentroids_(:,1), state_.eleCentroids_(:,2), state_.eleCentroids_(:,3), faceNormals(:,1), faceNormals(:,2), faceNormals(:,3));
 	set(hdEles, 'FaceColor', [65 174 118]/255, 'FaceAlpha', 1.0, 'EdgeColor', 'k');
 	set(hdNormals, 'LineWidth', 0.5, 'Color', 'r', 'MaxHeadSize', 0.5);
 	view(3);
@@ -2637,17 +2600,17 @@ function ShowMeshNormals(faceNormals)
 end
 
 function ShowPrincipalStressDirectionsByArrowsGlobally(varargin)
-	global nodeCoords_ numEles_ eNodMat_ silhouetteStruct_;
-	global meshTypeMap_ voidEleMap_;	
-	global localStressFieldPerEle_ globalStressFieldPerEle_;
+	global state_;
+	global state_;
+	global state_;
 	
 	if 1==nargin
 		eleList = varargin{1};
 		eleList = unique(eleList);
 	else
-		eleList = (1:numEles_)';
+		eleList = (1:state_.numEles_)';
 	end
-	volidEles = find(voidEleMap_);
+	volidEles = find(state_.voidEleMap_);
 	eleList = setdiff(eleList, volidEles);
 	
 	numElesConsidered = numel(eleList);
@@ -2658,19 +2621,19 @@ function ShowPrincipalStressDirectionsByArrowsGlobally(varargin)
 	opt_local2Global2Local = 1;
 	for ii=1:numElesConsidered
 		iEle = eleList(ii);
-		switch meshTypeMap_(iEle)
+		switch state_.meshTypeMap_(iEle)
 			case 'T3'
 				paras = [1 1]/3;
 				nodeListPerEle = 1:3;
-				iEleNodes = eNodMat_(iEle,nodeListPerEle);
+				iEleNodes = state_.eNodMat_(iEle,nodeListPerEle);
 				SF = ShapeFunction(paras, 'T3');
-				originList(ii,:) = SF * nodeCoords_(iEleNodes, :);
+				originList(ii,:) = SF * state_.nodeCoords_(iEleNodes, :);
 				
-				[iLocalFrame, ~, ~, ~] = ComputeLocalFrameAtGivenPosition(paras, nodeCoords_(iEleNodes, :), 'T3');
-				iEleStressesLocal = localStressFieldPerEle_{iEle};
+				[iLocalFrame, ~, ~, ~] = ComputeLocalFrameAtGivenPosition(paras, state_.nodeCoords_(iEleNodes, :), 'T3');
+				iEleStressesLocal = state_.localStressFieldPerEle_{iEle};
 				
 				if opt_local2Global2Local
-					iEleStressesGlobal = globalStressFieldPerEle_{iEle};
+					iEleStressesGlobal = state_.globalStressFieldPerEle_{iEle};
 					iStressTensorGlobal = SF * iEleStressesGlobal;
 					iStressTensor = GlobalFrame2Local_StressTensor(iStressTensorGlobal, iLocalFrame, 1);
 				else
@@ -2686,15 +2649,15 @@ function ShowPrincipalStressDirectionsByArrowsGlobally(varargin)
 			case 'Q4'
 				paras = [0 0];
 				nodeListPerEle = 1:4;
-				iEleNodes = eNodMat_(iEle,nodeListPerEle);
+				iEleNodes = state_.eNodMat_(iEle,nodeListPerEle);
 				SF = ShapeFunction(paras, 'Q4');
-				originList(ii,:) = SF * nodeCoords_(iEleNodes, :);
+				originList(ii,:) = SF * state_.nodeCoords_(iEleNodes, :);
 				
-				[iLocalFrame, ~, ~, ~] = ComputeLocalFrameAtGivenPosition(paras, nodeCoords_(iEleNodes, :), 'Q4');
-				iEleStressesLocal = localStressFieldPerEle_{iEle};
+				[iLocalFrame, ~, ~, ~] = ComputeLocalFrameAtGivenPosition(paras, state_.nodeCoords_(iEleNodes, :), 'Q4');
+				iEleStressesLocal = state_.localStressFieldPerEle_{iEle};
 				
 				if opt_local2Global2Local
-					iEleStressesGlobal = globalStressFieldPerEle_{iEle};
+					iEleStressesGlobal = state_.globalStressFieldPerEle_{iEle};
 					iStressTensorGlobal = SF * iEleStressesGlobal;
 					iStressTensor = GlobalFrame2Local_StressTensor(iStressTensorGlobal, iLocalFrame, 1);				
 				else
@@ -2709,14 +2672,14 @@ function ShowPrincipalStressDirectionsByArrowsGlobally(varargin)
 			case 'T6'
 				paras = [1 1]/3;
 				nodeListPerEle = 1:6;
-				iEleNodes = eNodMat_(iEle,nodeListPerEle);
+				iEleNodes = state_.eNodMat_(iEle,nodeListPerEle);
 				SF = ShapeFunction(paras, 'T6');
-				originList(ii,:) = SF * nodeCoords_(iEleNodes, :);
-				iEleStressesLocal = localStressFieldPerEle_{iEle};
-				[iLocalFrame, ~, ~, ~] = ComputeLocalFrameAtGivenPosition(paras, nodeCoords_(iEleNodes, :), 'T6');
+				originList(ii,:) = SF * state_.nodeCoords_(iEleNodes, :);
+				iEleStressesLocal = state_.localStressFieldPerEle_{iEle};
+				[iLocalFrame, ~, ~, ~] = ComputeLocalFrameAtGivenPosition(paras, state_.nodeCoords_(iEleNodes, :), 'T6');
 				
 				if opt_local2Global2Local
-					iEleStressesGlobal = globalStressFieldPerEle_{iEle};
+					iEleStressesGlobal = state_.globalStressFieldPerEle_{iEle};
 					iStressTensorGlobal = SF * iEleStressesGlobal;
 					iStressTensor = GlobalFrame2Local_StressTensor(iStressTensorGlobal, iLocalFrame, 1);					
 				else
@@ -2731,14 +2694,14 @@ function ShowPrincipalStressDirectionsByArrowsGlobally(varargin)
 			case 'Q8'
 				paras = [0 0];
 				nodeListPerEle = 1:8;
-				iEleNodes = eNodMat_(iEle,nodeListPerEle);
+				iEleNodes = state_.eNodMat_(iEle,nodeListPerEle);
 				SF = ShapeFunction(paras, 'Q8');
-				originList(ii,:) = SF * nodeCoords_(iEleNodes, :);
-				iEleStressesLocal = localStressFieldPerEle_{iEle};
-				[iLocalFrame, ~, ~, ~] = ComputeLocalFrameAtGivenPosition(paras, nodeCoords_(iEleNodes, :), 'Q8');
+				originList(ii,:) = SF * state_.nodeCoords_(iEleNodes, :);
+				iEleStressesLocal = state_.localStressFieldPerEle_{iEle};
+				[iLocalFrame, ~, ~, ~] = ComputeLocalFrameAtGivenPosition(paras, state_.nodeCoords_(iEleNodes, :), 'Q8');
 				
 				if opt_local2Global2Local
-					iEleStressesGlobal = globalStressFieldPerEle_{iEle};
+					iEleStressesGlobal = state_.globalStressFieldPerEle_{iEle};
 					iStressTensorGlobal = SF * iEleStressesGlobal;
 					iStressTensor = GlobalFrame2Local_StressTensor(iStressTensorGlobal, iLocalFrame, 1);						
 				else
@@ -2754,8 +2717,8 @@ function ShowPrincipalStressDirectionsByArrowsGlobally(varargin)
 	end
 
 
-	elesVis.vertices = nodeCoords_;
-	elesVis.faces = silhouetteStruct_.faces(eleList,:);
+	elesVis.vertices = state_.nodeCoords_;
+	elesVis.faces = state_.silhouetteStruct_.faces(eleList,:);
 	
 	figure;
 	hd_ele = patch(elesVis); hold on;
@@ -2763,7 +2726,7 @@ function ShowPrincipalStressDirectionsByArrowsGlobally(varargin)
 	hd_major = quiver3(originList(:,1), originList(:,2), originList(:,3), dirMajorList(:,1), dirMajorList(:,2), dirMajorList(:,3), 'LineWidth', 1, 'Color', [252 141 98]/255); hold on;
 	hd_major = quiver3(originList(:,1), originList(:,2), originList(:,3), dirMinorList(:,1), dirMinorList(:,2), dirMinorList(:,3), 'LineWidth', 1, 'Color', [0 176 80]/255);
 	set(hd_ele, 'FaceColor', [204 204 204]/255, 'FaceAlpha', 1.0, 'EdgeColor', 'k', 'LineWidth', 2);
-	if 0==sum(nodeCoords_(:,3))
+	if 0==sum(state_.nodeCoords_(:,3))
 		view(2); %light	
 	else
 		view(3); %light	 
@@ -2772,18 +2735,18 @@ function ShowPrincipalStressDirectionsByArrowsGlobally(varargin)
 end
 
 function ShowProblemDescription()
-	global nodeCoords_;
-	global loadingCond_;
-	global fixingCond_;
-	global boundingBox_;
-	global silhouetteStruct_;
+	global state_;
+	global state_;
+	global state_;
+	global state_;
+	global state_;
 
 	
-	hd = patch(silhouetteStruct_); hold('on');
+	hd = patch(state_.silhouetteStruct_); hold('on');
 	set(hd, 'FaceColor', [65 174 118]/255, 'FaceAlpha', 1.0, 'EdgeColor', 'k');
-    if ~isempty(loadingCond_)
+    if ~isempty(state_.loadingCond_)
 		lB = 0.2; uB = 1.0;
-		amps = vecnorm(loadingCond_(:,2:4),2,2);
+		amps = vecnorm(state_.loadingCond_(:,2:4),2,2);
 		maxAmp = max(amps); minAmp = min(amps);
 		if abs(minAmp-maxAmp)/(minAmp+maxAmp)<0.1
 			scalingFac = 1;
@@ -2791,18 +2754,18 @@ function ShowProblemDescription()
 			if minAmp/maxAmp>lB/uB, lB = minAmp/maxAmp; end
 			scalingFac = lB + (uB-lB)*(amps-minAmp)/(maxAmp-minAmp);
 		end
-		loadingDirVec = loadingCond_(:,2:4)./amps.*scalingFac;
-		coordLoadedNodes = nodeCoords_(loadingCond_(:,1),:);
-		amplitudesF = mean(boundingBox_(2,:)-boundingBox_(1,:))/5 * loadingDirVec;
+		loadingDirVec = state_.loadingCond_(:,2:4)./amps.*scalingFac;
+		coordLoadedNodes = state_.nodeCoords_(state_.loadingCond_(:,1),:);
+		amplitudesF = mean(state_.boundingBox_(2,:)-state_.boundingBox_(1,:))/5 * loadingDirVec;
 		hold('on'); quiver3(coordLoadedNodes(:,1), coordLoadedNodes(:,2), coordLoadedNodes(:,3), amplitudesF(:,1), ...
 			amplitudesF(:,2), amplitudesF(:,3), 0, 'Color', [255 127 0.0]/255, 'LineWidth', 2, 'MaxHeadSize', 1, 'MaxHeadSize', 1);
 	end
-    if ~isempty(fixingCond_)
-		tarNodeCoord = nodeCoords_(fixingCond_(:,1),:);
+    if ~isempty(state_.fixingCond_)
+		tarNodeCoord = state_.nodeCoords_(state_.fixingCond_(:,1),:);
 		hold('on'); hd1 = plot3(tarNodeCoord(:,1), tarNodeCoord(:,2), tarNodeCoord(:,3), 'x', ...
 			'color', [153 153 153]/255, 'LineWidth', 3, 'MarkerSize', 15);		
     end
-	if ~isempty(find(0==(boundingBox_(2,:)-boundingBox_(1,:)))) %%2D
+	if ~isempty(find(0==(state_.boundingBox_(2,:)-state_.boundingBox_(1,:)))) %%2D
 		view(2);
 	else
 		view(3);
@@ -2824,66 +2787,66 @@ function StressTopologyAnalysis()
 end
 
 function ComputeTopologicalSkeletons()
-	global degePts_;
-	global nodeCoords_ eNodMat_ meshTypeMap_;
-	global localStressFieldPerEle_ globalStressFieldPerEle_;
-	global approxiInterp_;
-	global tracingSche_; 
+	global state_;
+	global state_;
+	global state_;
+	global state_;
+	global state_;
 	
-	prescribedTracingSche = tracingSche_;
-	tracingSche_ = 'Euler';
-	numDegPts = numel(degePts_);
+	prescribedTracingSche = state_.tracingSche_;
+	state_.tracingSche_ = 'Euler';
+	numDegPts = numel(state_.degePts_);
 	if 0==numDegPts, return; end
 	
 	%%1. Derivatives of Cartesian Stresses at Degenerate Points w.r.t. Cartesian Coordinates
 	for ii=1:numDegPts
-		iEle = degePts_(ii).eleIndex;
-		iEleType = meshTypeMap_(iEle);
-		iPara = degePts_(ii).paraCoord;
+		iEle = state_.degePts_(ii).eleIndex;
+		iEleType = state_.meshTypeMap_(iEle);
+		iPara = state_.degePts_(ii).paraCoord;
 		[dNds, dNdt] = DeShapeFunction(iPara, iEleType);
 		switch iEleType
 			case 'T3'
-				iEleNodes = eNodMat_(iEle,1:3);
-				iEleCoords = nodeCoords_(iEleNodes,:);
+				iEleNodes = state_.eNodMat_(iEle,1:3);
+				iEleCoords = state_.nodeCoords_(iEleNodes,:);
 				[iLocalFrame, ~, t1, t2] = ComputeLocalFrameAtGivenPosition(iPara, iEleCoords, iEleType);
-				if approxiInterp_
-					iEleStressTensorLocal = localStressFieldPerEle_{iEle};
+				if state_.approxiInterp_
+					iEleStressTensorLocal = state_.localStressFieldPerEle_{iEle};
 				else
-					iEleStressTensorGlobal = globalStressFieldPerEle_{iEle};
+					iEleStressTensorGlobal = state_.globalStressFieldPerEle_{iEle};
 				end
 			case 'Q4'
-				iEleNodes = eNodMat_(iEle,1:4);
-				iEleCoords = nodeCoords_(iEleNodes,:);
+				iEleNodes = state_.eNodMat_(iEle,1:4);
+				iEleCoords = state_.nodeCoords_(iEleNodes,:);
 				[iLocalFrame, ~, t1, t2] = ComputeLocalFrameAtGivenPosition(iPara, iEleCoords, iEleType);
-				if approxiInterp_
-					iEleStressTensorLocal = localStressFieldPerEle_{iEle};
+				if state_.approxiInterp_
+					iEleStressTensorLocal = state_.localStressFieldPerEle_{iEle};
 				else
-					iEleStressTensorGlobal = globalStressFieldPerEle_{iEle};
+					iEleStressTensorGlobal = state_.globalStressFieldPerEle_{iEle};
 				end				
 			case 'T6'
-				iEleNodes = eNodMat_(iEle,1:6);
-				iEleCoords = nodeCoords_(iEleNodes,:);
+				iEleNodes = state_.eNodMat_(iEle,1:6);
+				iEleCoords = state_.nodeCoords_(iEleNodes,:);
 				[iLocalFrame, ~, t1, t2] = ComputeLocalFrameAtGivenPosition(iPara, iEleCoords, iEleType);
-				if approxiInterp_
-					iEleStressTensorLocal = localStressFieldPerEle_{iEle};
+				if state_.approxiInterp_
+					iEleStressTensorLocal = state_.localStressFieldPerEle_{iEle};
 				else
-					iEleStressTensorGlobal = globalStressFieldPerEle_{iEle};
+					iEleStressTensorGlobal = state_.globalStressFieldPerEle_{iEle};
 				end				
 			case 'Q8'
-				iEleNodes = eNodMat_(iEle,1:8);
-				iEleCoords = nodeCoords_(iEleNodes,:);
+				iEleNodes = state_.eNodMat_(iEle,1:8);
+				iEleCoords = state_.nodeCoords_(iEleNodes,:);
 				[iLocalFrame, ~, t1, t2] = ComputeLocalFrameAtGivenPosition(iPara, iEleCoords, iEleType);
-				if approxiInterp_
-					iEleStressTensorLocal = localStressFieldPerEle_{iEle};
+				if state_.approxiInterp_
+					iEleStressTensorLocal = state_.localStressFieldPerEle_{iEle};
 				else
-					iEleStressTensorGlobal = globalStressFieldPerEle_{iEle};
+					iEleStressTensorGlobal = state_.globalStressFieldPerEle_{iEle};
 				end				
 		end
 		e1 = iLocalFrame(:,1);
 		e2 = iLocalFrame(:,2);
 		JsurfaceMapping = [sum(t1(:).*e1) sum(t2(:).*e1); sum(t1(:).*e2) sum(t2(:).*e2)];
 		dNdxy = inv(JsurfaceMapping)' * [dNds; dNdt];
-		if approxiInterp_
+		if state_.approxiInterp_
 			dStressdxLocal = dNdxy(1,:) * iEleStressTensorLocal;
 			dStressdyLocal = dNdxy(2,:) * iEleStressTensorLocal;
 			df1dx = (dStressdxLocal(1)-dStressdxLocal(2))/2; a = df1dx;
@@ -2900,26 +2863,26 @@ function ComputeTopologicalSkeletons()
 			df2dx = dStressdxLocal(3); c = df2dx;
 			df2dy = dStressdyLocal(3); d = df2dy;
 		end
-		degePts_(ii).df12dxy = [a b; c d];
-		degePts_(ii).delta = a*d - b*c; %% Negative -> Trisector; Positive -> Wedge
+		state_.degePts_(ii).df12dxy = [a b; c d];
+		state_.degePts_(ii).delta = a*d - b*c; %% Negative -> Trisector; Positive -> Wedge
 		rawRoots = roots([d (c+2*b) (2*a-d) -c]);
-		degePts_(ii).tangentList = rawRoots(0==imag(rawRoots));
+		state_.degePts_(ii).tangentList = rawRoots(0==imag(rawRoots));
 	end
 	
 	%%2. Get Topological Skeleton
 	for ii=1:numDegPts
-		degePts_(ii).majorSkeletons = repmat(degePts_(ii).majorSkeletons, numel(degePts_(ii).tangentList), 1);
-		degePts_(ii).minorSkeletons = repmat(degePts_(ii).minorSkeletons, numel(degePts_(ii).tangentList), 1);
-		for jj=1:numel(degePts_(ii).tangentList)
-			ijSeed = [degePts_(ii).eleIndex degePts_(ii).paraCoord];
-			iniDir = [1 degePts_(ii).tangentList(jj)]; iniDir = iniDir/norm(iniDir);
+		state_.degePts_(ii).majorSkeletons = repmat(state_.degePts_(ii).majorSkeletons, numel(state_.degePts_(ii).tangentList), 1);
+		state_.degePts_(ii).minorSkeletons = repmat(state_.degePts_(ii).minorSkeletons, numel(state_.degePts_(ii).tangentList), 1);
+		for jj=1:numel(state_.degePts_(ii).tangentList)
+			ijSeed = [state_.degePts_(ii).eleIndex state_.degePts_(ii).paraCoord];
+			iniDir = [1 state_.degePts_(ii).tangentList(jj)]; iniDir = iniDir/norm(iniDir);
 			ijMajorPSL = CreatePrincipalStressLine(ijSeed, 'MAJOR', iniDir);
 			ijMinorPSL = CreatePrincipalStressLine(ijSeed, 'MINOR', iniDir);
-			degePts_(ii).majorSkeletons(jj) = ijMajorPSL;
-			degePts_(ii).minorSkeletons(jj) = ijMinorPSL;	
+			state_.degePts_(ii).majorSkeletons(jj) = ijMajorPSL;
+			state_.degePts_(ii).minorSkeletons(jj) = ijMinorPSL;	
 		end
 	end
-	tracingSche_ = prescribedTracingSche;
+	state_.tracingSche_ = prescribedTracingSche;
 end
 
 function val = DegeneratePointStruct()
@@ -2941,15 +2904,15 @@ function val = DegeneratePointStruct()
 end
 
 function LocateDegeneratePoints()
-	global nodeCoords_ eNodMat_ meshTypeMap_
-	global candidateElementsIncDegePts_ degePts_
-	global refScalingSize_;
+	global state_;
+	global state_;
+	global state_;
 	
-	numCandiEles = numel(candidateElementsIncDegePts_);
+	numCandiEles = numel(state_.candidateElementsIncDegePts_);
 	distilledCandidateElements = [];
 	for ii=1:numCandiEles
-		iEle = candidateElementsIncDegePts_(ii);
-		iEleType = meshTypeMap_(iEle);
+		iEle = state_.candidateElementsIncDegePts_(ii);
+		iEleType = state_.meshTypeMap_(iEle);
 		switch iEleType
 			case 'T3'
 				[paras, isDegePt] = NewtonRhapson_LocatingDegPt(iEle, [0 0]);
@@ -3041,7 +3004,7 @@ function LocateDegeneratePoints()
 				end				
 		end
 	end
-	if isempty(distilledCandidateElements), degePts_ = []; return; end
+	if isempty(distilledCandidateElements), state_.degePts_ = []; return; end
 	
 	%% Merge Degenerate Point(s) Located at the element Edge
 	numDistilledCandiEles = size(distilledCandidateElements, 1);
@@ -3050,25 +3013,25 @@ function LocateDegeneratePoints()
 	for ii=1:numDistilledCandiEles
 		iEle = distilledCandidateElements(ii,1);
 		iPara = distilledCandidateElements(ii,2:3);
-		iEleType = meshTypeMap_(iEle);
+		iEleType = state_.meshTypeMap_(iEle);
 		switch iEleType
 			case 'T3'
-				iEleNodes = eNodMat_(iEle,1:3);
+				iEleNodes = state_.eNodMat_(iEle,1:3);
 			case 'Q4'
-				iEleNodes = eNodMat_(iEle,1:4);
+				iEleNodes = state_.eNodMat_(iEle,1:4);
 			case 'T6'
-				iEleNodes = eNodMat_(iEle,1:6);
+				iEleNodes = state_.eNodMat_(iEle,1:6);
 			case 'Q8'
-				iEleNodes = eNodMat_(iEle,1:8);	
+				iEleNodes = state_.eNodMat_(iEle,1:8);	
 		end
 		SF = ShapeFunction(iPara, iEleType);
-		iEleNodeCoords = nodeCoords_(iEleNodes,:);
+		iEleNodeCoords = state_.nodeCoords_(iEleNodes,:);
 		iPhyCoord = SF * iEleNodeCoords;
 		if 1==ii
 			refCoords = iPhyCoord;
 			validDegeneratePointsMap(ii) = true;
 		else
-			if min(vecnorm(iPhyCoord-refCoords, 2, 2)) > 1.0e-2*refScalingSize_ %%Not the Same Degenerate Point
+			if min(vecnorm(iPhyCoord-refCoords, 2, 2)) > 1.0e-2*state_.refScalingSize_ %%Not the Same Degenerate Point
 				refCoords(end+1,:) = iPhyCoord;
 				validDegeneratePointsMap(ii) = true;
 			end
@@ -3078,26 +3041,26 @@ function LocateDegeneratePoints()
 	
 	%%Setup Degenerate Point Structure
 	numDegePts = size(distilledCandidateElements,1);
-	degePts_ = DegeneratePointStruct();
-	degePts_ = repmat(degePts_, numDegePts, 1);
+	state_.degePts_ = DegeneratePointStruct();
+	state_.degePts_ = repmat(state_.degePts_, numDegePts, 1);
 	for ii=1:numDegePts
-		degePts_(ii).eleIndex = distilledCandidateElements(ii,1);
-		degePts_(ii).paraCoord = distilledCandidateElements(ii,2:3);
-		degePts_(ii).phyCoord = refCoords(ii,:);
+		state_.degePts_(ii).eleIndex = distilledCandidateElements(ii,1);
+		state_.degePts_(ii).paraCoord = distilledCandidateElements(ii,2:3);
+		state_.degePts_(ii).phyCoord = refCoords(ii,:);
 	end
 end
 
 function IdentifyCandidateElements()
-	global numEles_ meshTypeMap_ boundaryElements_ voidEleMap_;
-	global localStressFieldPerEle_;
-	global candidateElementsIncDegePts_;
+	global state_;
+	global state_;
+	global state_;
 	
-	excludedElementMap = true(numEles_,1);
+	excludedElementMap = true(state_.numEles_,1);
 	
-	for ii=1:numEles_
-		if voidEleMap_(ii), continue; end
-		eleStress = localStressFieldPerEle_{ii};
-		switch meshTypeMap_(ii)
+	for ii=1:state_.numEles_
+		if state_.voidEleMap_(ii), continue; end
+		eleStress = state_.localStressFieldPerEle_{ii};
+		switch state_.meshTypeMap_(ii)
 			case {'T3', 'Q4', 'T6'}
 				opt = DegenrationMeasure_SignConsistency(eleStress);
 			case 'Q8'
@@ -3106,8 +3069,8 @@ function IdentifyCandidateElements()
 		end
 		excludedElementMap(ii) = opt;
 	end
-	candidateElementsIncDegePts_ = find(false==excludedElementMap);
-	candidateElementsIncDegePts_ = setdiff(candidateElementsIncDegePts_, boundaryElements_);
+	state_.candidateElementsIncDegePts_ = find(false==excludedElementMap);
+	state_.candidateElementsIncDegePts_ = setdiff(state_.candidateElementsIncDegePts_, state_.boundaryElements_);
 end
 
 function opt = DegenrationMeasure_SignConsistency(eleStress)
@@ -3141,9 +3104,9 @@ function opt = DegenrationMeasure_BernsteinBoundingQuad(eleStress)
 end
 
 function [paras, isDegePt] = NewtonRhapson_LocatingDegPt(iEle, target, varargin)
-	global nodeCoords_ eNodMat_ meshTypeMap_;
-	global localStressFieldPerEle_ globalStressFieldPerEle_;
-	global approxiInterp_;
+	global state_;
+	global state_;
+	global state_;
 	
 	target = target(:)';
 	
@@ -3152,23 +3115,23 @@ function [paras, isDegePt] = NewtonRhapson_LocatingDegPt(iEle, target, varargin)
 	tol_x  = 1e-12;                      % step tolerance in param space
 	lambda0 = 0;                         % LM damping (0 = pure Newton)
 	project_to_domain = true;
-	iEleType = meshTypeMap_(iEle);	
+	iEleType = state_.meshTypeMap_(iEle);	
 	switch iEleType
 		case 'T3'
 			natCoordScope = [0 0; 1 0; 0 1];
-			if approxiInterp_
-				eleStressTensorsLocal = localStressFieldPerEle_{iEle};
+			if state_.approxiInterp_
+				eleStressTensorsLocal = state_.localStressFieldPerEle_{iEle};
 			else
-				vtxCoords = nodeCoords_(eNodMat_(iEle,1:3),:);
-                eleStressTensorsGlobal = globalStressFieldPerEle_{iEle};
+				vtxCoords = state_.nodeCoords_(state_.eNodMat_(iEle,1:3),:);
+                eleStressTensorsGlobal = state_.globalStressFieldPerEle_{iEle};
 			end
 		case 'Q4'
 			natCoordScope = [-1 -1; 1 -1; 1 1; -1 1];
-			if approxiInterp_
-				eleStressTensorsLocal = localStressFieldPerEle_{iEle};
+			if state_.approxiInterp_
+				eleStressTensorsLocal = state_.localStressFieldPerEle_{iEle};
 			else
-				vtxCoords = nodeCoords_(eNodMat_(iEle,1:4),:);
-                eleStressTensorsGlobal = globalStressFieldPerEle_{iEle};
+				vtxCoords = state_.nodeCoords_(state_.eNodMat_(iEle,1:4),:);
+                eleStressTensorsGlobal = state_.globalStressFieldPerEle_{iEle};
 			end
 		case 'T6'
 			natCoordScope = [0 0; 1 0; 0 1; 0.5	0; 0.5 0.5; 0 0.5];
@@ -3187,11 +3150,11 @@ function [paras, isDegePt] = NewtonRhapson_LocatingDegPt(iEle, target, varargin)
 						error('Un-supported Division!');
 				end
 			end
-			if approxiInterp_
-				eleStressTensorsLocal = localStressFieldPerEle_{iEle};
+			if state_.approxiInterp_
+				eleStressTensorsLocal = state_.localStressFieldPerEle_{iEle};
 			else
-				vtxCoords = nodeCoords_(eNodMat_(iEle,1:6),:);
-				eleStressTensorsGlobal = globalStressFieldPerEle_{iEle};
+				vtxCoords = state_.nodeCoords_(state_.eNodMat_(iEle,1:6),:);
+				eleStressTensorsGlobal = state_.globalStressFieldPerEle_{iEle};
 			end
 		case 'Q8'
 			natCoordScope = [-1 -1; 1 -1; 1 1; -1 1; 0 -1; 1 0; 0 1; -1 0];
@@ -3210,11 +3173,11 @@ function [paras, isDegePt] = NewtonRhapson_LocatingDegPt(iEle, target, varargin)
 						error('Un-supported Division!');
 				end				
 			end
-			if approxiInterp_
-				eleStressTensorsLocal = localStressFieldPerEle_{iEle};
+			if state_.approxiInterp_
+				eleStressTensorsLocal = state_.localStressFieldPerEle_{iEle};
 			else
-				vtxCoords = nodeCoords_(eNodMat_(iEle,1:8),:);
-				eleStressTensorsGlobal = globalStressFieldPerEle_{iEle};
+				vtxCoords = state_.nodeCoords_(state_.eNodMat_(iEle,1:8),:);
+				eleStressTensorsGlobal = state_.globalStressFieldPerEle_{iEle};
 			end
 		otherwise
 			error('Un-supported Element Type!');
@@ -3229,7 +3192,7 @@ function [paras, isDegePt] = NewtonRhapson_LocatingDegPt(iEle, target, varargin)
 		[dNds, dNdt] = DeShapeFunction([s t], iEleType); % 1xMe
 	
 		% q(s,t) and residual r = q - target
-		if approxiInterp_
+		if state_.approxiInterp_
 			%% q   = N    * vtxVals;                % 1x2
 			q = N * [(eleStressTensorsLocal(:,1)-eleStressTensorsLocal(:,2))/2 eleStressTensorsLocal(:,3)];
 		else
@@ -3248,7 +3211,7 @@ function [paras, isDegePt] = NewtonRhapson_LocatingDegPt(iEle, target, varargin)
 
 		% Jacobian J = dq/d(s,t) arranged as 2x2:
 		% J = [ df1/ds  df1/dt ; df2/ds  df2/dt ]
-		if approxiInterp_
+		if state_.approxiInterp_
 			dqs = dNds * [(eleStressTensorsLocal(:,1)-eleStressTensorsLocal(:,2))/2 eleStressTensorsLocal(:,3)];  % 1x2  (df1/ds, df2/ds)
 			dqt = dNdt * [(eleStressTensorsLocal(:,1)-eleStressTensorsLocal(:,2))/2 eleStressTensorsLocal(:,3)];  % 1x2  (df1/dt, df2/dt)				
 		else
@@ -3305,7 +3268,7 @@ function [paras, isDegePt] = NewtonRhapson_LocatingDegPt(iEle, target, varargin)
 			end
 	
 			N_try = ShapeFunction([s_try t_try], iEleType);
-			if approxiInterp_
+			if state_.approxiInterp_
 				q_try = N_try * [(eleStressTensorsLocal(:,1)-eleStressTensorsLocal(:,2))/2 eleStressTensorsLocal(:,3)];
 			else
 				iStressGlobal_try = N_try * eleStressTensorsGlobal;
